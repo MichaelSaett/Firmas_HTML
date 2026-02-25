@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ubicación de Firmas E-digital</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; color: #333; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .panel { background: #ffffff; padding: 30px; border-radius: 12px; width: 100%; max-width: 800px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; border: 1px solid #e0e0e0; }
+        h2 { margin-top: 0; color: #2c3e50; }
+        p { color: #7f8c8d; font-size: 15px; margin-bottom: 20px; }
+        .upload-area { border: 2px dashed #bdc3c7; border-radius: 8px; padding: 40px; cursor: pointer; background: #fafafa; margin-bottom: 20px; display: block; transition: 0.3s; }
+        .upload-area:hover, .upload-area.dragover { border-color: #3498db; background: #ebf5fb; }
+        #pdfFile { display: none; }
+        button { background: #3498db; color: #fff; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #2980b9; transform: scale(1.02); }
+        .btn-add { background: #2ecc71; display: none; margin-right: 10px; }
+        .btn-add:hover { background: #27ae60; }
+        .btn-save { background: #e67e22; display: none; }
+        .btn-save:hover { background: #d35400; }
+        .botones-container { display: flex; justify-content: center; margin-top: 15px; }
+        #visor-container { display: none; margin-top: 30px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: white; }
+        canvas { display: block; }
+        .firma-box { position: absolute; width: 160px; height: 56px; background: rgba(46, 204, 113, 0.2); border: 2px solid #2ecc71; color: #27ae60; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; }
+        .firma-box:active { cursor: grabbing; background: rgba(46, 204, 113, 0.4); }
+        .firma-box span { font-size: 10px; font-weight: normal; color: #7f8c8d; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <h2>Ubicación de Firmas</h2>
+        <p>Sube el documento, ubica las firmas y envía la plantilla.</p>
+        
+        <label for="pdfFile" class="upload-area" id="drop-area">
+            <span style="font-size: 30px;">📄</span><br><br>
+            <span id="file-label" style="font-weight: bold; color: #2c3e50;">Arrastra aquí el PDF</span>
+        </label>
+        <input type="file" id="pdfFile" accept="application/pdf">
+        
+        <div class="botones-container">
+            <button id="btnProcesar" onclick="procesarPDF()">Procesar Documento</button>
+            <button id="btnAgregarFirma" class="btn-add" onclick="agregarFirma()">+ Añadir Firma</button>
+            <button id="btnGuardar" class="btn-save" onclick="enviarAE_digital()">💾 Guardar Configuración</button>
+        </div>
+        <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">El sistema de Python está procesando el documento... ⏳</div>
+    </div>
+
+    <div id="visor-container">
+        <canvas id="pdf-canvas"></canvas>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        let currentJson = { positions: {} };
+        let pageHeight = 0;
+        let currentScale = 1.5;
+        const FIRMA_H = 56;
+        
+        // Aquí guardaremos el HTML que nos mande el jefe en secreto
+        let htmlDelJefe = ""; 
+
+        const fileInput = document.getElementById('pdfFile');
+        const fileLabel = document.getElementById('file-label');
+        const dropArea = document.getElementById('drop-area');
+
+        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
+        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+        dropArea.addEventListener('drop', (e) => { e.preventDefault(); dropArea.classList.remove('dragover'); if(e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; actualizarNombre(); } });
+        fileInput.addEventListener('change', actualizarNombre);
+
+        function actualizarNombre() { if(fileInput.files.length > 0) fileLabel.textContent = "✅ " + fileInput.files[0].name; }
+
+        async function procesarPDF() {
+            const file = fileInput.files[0];
+            if (!file) return alert("Selecciona un PDF primero.");
+
+            document.getElementById('btnProcesar').style.display = 'none';
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('drop-area').style.display = 'none'; 
+
+            const formData = new FormData();
+            formData.append('documento', file);
+
+            try {
+                // LLAMAMOS A LA API EN FASTAPI
+                const res = await fetch('/api/procesar', { method: 'POST', body: formData });
+                if (!res.ok) throw new Error("Error en el servidor Python.");
+                const serverData = await res.json();
+                
+                // GUARDAMOS EL HTML DE TU JEFE EN MEMORIA
+                htmlDelJefe = serverData.html_jefe;
+
+                pageHeight = serverData.meta.page_height;
+                currentJson.positions = {};
+                
+                await renderizarPDF(file, serverData.meta.paginas_totales);
+                
+                document.getElementById('visor-container').style.display = 'block';
+                document.getElementById('btnAgregarFirma').style.display = 'inline-block'; 
+                document.getElementById('btnGuardar').style.display = 'inline-block'; 
+
+            } catch (err) {
+                alert("❌ " + err.message);
+                document.getElementById('drop-area').style.display = 'block';
+                document.getElementById('btnProcesar').style.display = 'inline-block';
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+        async function renderizarPDF(file, totalPaginas) {
+            const fileURL = URL.createObjectURL(file);
+            const pdf = await pdfjsLib.getDocument(fileURL).promise;
+            const page = await pdf.getPage(totalPaginas);
+            const viewport = page.getViewport({ scale: currentScale }); 
+            const canvas = document.getElementById('pdf-canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            document.getElementById('visor-container').style.width = viewport.width + "px";
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+        }
+
+        function agregarFirma() {
+            let newIndex = 1; while (currentJson.positions['signer-' + newIndex]) newIndex++;
+            const signerKey = 'signer-' + newIndex;
+            currentJson.positions[signerKey] = { x: 50 + (newIndex * 10), y: pageHeight - 100 - (newIndex * 20) };
+            
+            const box = document.createElement('div');
+            box.id = 'box-' + signerKey; box.className = 'firma-box';
+            box.innerHTML = `Firma ${newIndex} <span>(Doble clic borrar)</span>`;
+            box.ondblclick = function() { box.remove(); delete currentJson.positions[signerKey]; };
+            document.getElementById('visor-container').appendChild(box);
+            colocarCaja(box.id, currentJson.positions[signerKey], currentScale);
+        }
+
+        function colocarCaja(id, pos, scale) {
+            const box = document.getElementById(id);
+            box.style.left = (pos.x * scale) + 'px'; box.style.top = ((pageHeight - pos.y - FIRMA_H) * scale) + 'px';
+            hacerArrastrable(box, id.replace('box-', ''), scale);
+        }
+
+        function hacerArrastrable(elmnt, signerKey, scale) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            elmnt.onmousedown = (e) => { e.preventDefault(); pos3 = e.clientX; pos4 = e.clientY; document.onmouseup = closeDrag; document.onmousemove = elementDrag; elmnt.style.zIndex = 10; };
+            function elementDrag(e) { e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY; elmnt.style.top = (elmnt.offsetTop - pos2) + "px"; elmnt.style.left = (elmnt.offsetLeft - pos1) + "px"; currentJson.positions[signerKey].x = Math.round(elmnt.offsetLeft / scale); currentJson.positions[signerKey].y = Math.round(pageHeight - (elmnt.offsetTop / scale) - FIRMA_H); }
+            function closeDrag() { document.onmouseup = null; document.onmousemove = null; elmnt.style.zIndex = 1; }
+        }
+
+        // --- ENVIAMOS TODO DE VUELTA A E-DIGITAL ---
+        function enviarAE_digital() {
+            if (Object.keys(currentJson.positions).length === 0) {
+                return alert("⚠️ Por favor, añade al menos una firma.");
+            }
+
+            // Aquí armamos el paquete final con el HTML del Jefe y las coordenadas tuyas
+            const paqueteFinal = {
+                tipo: 'GUARDAR_PLANTILLA_COMPLETA',
+                datos: {
+                    html_documento: htmlDelJefe,
+                    coordenadas_firmas: currentJson.positions,
+                    total_firmas: Object.keys(currentJson.positions).length
+                }
+            };
+
+            // Lo enviamos a la ventana "Padre" que contiene este iframe
+            window.parent.postMessage(paqueteFinal, '*');
+            
+            // Mensaje visual para ti durante la prueba
+            alert("📦 Paquete enviado a E-digital exitosamente. Revisa la consola de tu navegador.");
+            console.log("PAQUETE ENVIADO:", paqueteFinal);
+        }
+    </script>
+</body>
+</html>
