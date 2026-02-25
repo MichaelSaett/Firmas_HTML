@@ -2,42 +2,54 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ubicación de Firmas E-digital</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; color: #333; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
-        .panel { background: #ffffff; padding: 30px; border-radius: 12px; width: 100%; max-width: 800px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; border: 1px solid #e0e0e0; }
-        h2 { margin-top: 0; color: #2c3e50; }
+        /* CSS Responsive */
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; color: #333; display: flex; flex-direction: column; align-items: center; padding: 20px 10px; margin: 0; overflow-x: hidden; }
+        .panel { background: #ffffff; padding: 30px 20px; border-radius: 12px; width: 100%; max-width: 800px; box-sizing: border-box; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; border: 1px solid #e0e0e0; }
+        h2 { margin-top: 0; color: #2c3e50; font-size: 24px; }
         p { color: #7f8c8d; font-size: 15px; margin-bottom: 20px; }
-        .upload-area { border: 2px dashed #bdc3c7; border-radius: 8px; padding: 40px; cursor: pointer; background: #fafafa; margin-bottom: 20px; display: block; transition: 0.3s; }
+        .upload-area { border: 2px dashed #bdc3c7; border-radius: 8px; padding: 30px 10px; cursor: pointer; background: #fafafa; margin-bottom: 20px; display: block; transition: 0.3s; word-wrap: break-word; }
         .upload-area:hover, .upload-area.dragover { border-color: #3498db; background: #ebf5fb; }
         #pdfFile { display: none; }
-        button { background: #3498db; color: #fff; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+        
+        button { background: #3498db; color: #fff; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; width: 100%; max-width: 250px; margin: 5px; }
         button:hover { background: #2980b9; transform: scale(1.02); }
-        .btn-add { background: #2ecc71; display: none; margin-right: 10px; }
+        .btn-add { background: #2ecc71; display: none; }
         .btn-add:hover { background: #27ae60; }
         .btn-save { background: #e67e22; display: none; }
         .btn-save:hover { background: #d35400; }
-        .botones-container { display: flex; justify-content: center; margin-top: 15px; }
-        #visor-container { display: none; margin-top: 30px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: white; }
-        canvas { display: block; }
-        .firma-box { position: absolute; width: 160px; height: 56px; background: rgba(46, 204, 113, 0.2); border: 2px solid #2ecc71; color: #27ae60; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; }
+        
+        .botones-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
+        
+        /* Visor Responsive */
+        #visor-container { display: none; margin-top: 20px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: white; max-width: 100%; overflow: hidden; }
+        canvas { display: block; max-width: 100%; height: auto; }
+        
+        .firma-box { position: absolute; width: 160px; height: 56px; background: rgba(46, 204, 113, 0.2); border: 2px solid #2ecc71; color: #27ae60; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; touch-action: none; text-align: center; font-size: 13px; line-height: 1.1; padding: 2px; box-sizing: border-box; }
         .firma-box:active { cursor: grabbing; background: rgba(46, 204, 113, 0.4); }
-        .firma-box span { font-size: 10px; font-weight: normal; color: #7f8c8d; pointer-events: none; }
+        .firma-box span { font-size: 9px; font-weight: normal; color: #7f8c8d; pointer-events: none; margin-top: 2px;}
+
+        /* Ajustes para celulares pequeños */
+        @media (max-width: 600px) {
+            h2 { font-size: 20px; }
+            button { max-width: 100%; }
+        }
     </style>
 </head>
 <body>
 
     <div class="panel">
         <h2>Ubicación de Firmas</h2>
-        <p>Sube el documento, ubica las firmas y envía la plantilla.</p>
+        <p>Sube el documento, ubica las firmas y envía la configuración.</p>
         
         <label for="pdfFile" class="upload-area" id="drop-area">
             <span style="font-size: 30px;">📄</span><br><br>
-            <span id="file-label" style="font-weight: bold; color: #2c3e50;">Arrastra aquí el PDF</span>
+            <span id="file-label" style="font-weight: bold; color: #2c3e50;">Toca aquí o arrastra tu PDF</span>
         </label>
         <input type="file" id="pdfFile" accept="application/pdf">
         
@@ -46,7 +58,7 @@
             <button id="btnAgregarFirma" class="btn-add" onclick="agregarFirma()">+ Añadir Firma</button>
             <button id="btnGuardar" class="btn-save" onclick="enviarAE_digital()">💾 Guardar Configuración</button>
         </div>
-        <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">El sistema de Python está procesando el documento... ⏳</div>
+        <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">Procesando documento... ⏳</div>
     </div>
 
     <div id="visor-container">
@@ -58,22 +70,31 @@
 
         let currentJson = { positions: {} };
         let pageHeight = 0;
-        let currentScale = 1.5;
-        const FIRMA_H = 56;
-        
-        // Aquí guardaremos el HTML que nos mande el jefe en secreto
+        let currentScale = 1.0; // Se calculará dinámicamente
+        const FIRMA_H = 50; // Altura estándar de la firma
         let htmlDelJefe = ""; 
 
         const fileInput = document.getElementById('pdfFile');
         const fileLabel = document.getElementById('file-label');
         const dropArea = document.getElementById('drop-area');
 
+
+
+
+
         dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
         dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
         dropArea.addEventListener('drop', (e) => { e.preventDefault(); dropArea.classList.remove('dragover'); if(e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; actualizarNombre(); } });
         fileInput.addEventListener('change', actualizarNombre);
 
-        function actualizarNombre() { if(fileInput.files.length > 0) fileLabel.textContent = "✅ " + fileInput.files[0].name; }
+        function actualizarNombre() { 
+            if(fileInput.files.length > 0) {
+                // Acortar nombres largos en pantallas móviles
+                let name = fileInput.files[0].name;
+                if(name.length > 25) name = name.substring(0, 22) + '...';
+                fileLabel.textContent = "✅ " + name; 
+            }
+        }
 
         async function procesarPDF() {
             const file = fileInput.files[0];
@@ -87,14 +108,11 @@
             formData.append('documento', file);
 
             try {
-                // LLAMAMOS A LA API EN FASTAPI
                 const res = await fetch('/api/procesar', { method: 'POST', body: formData });
                 if (!res.ok) throw new Error("Error en el servidor Python.");
                 const serverData = await res.json();
                 
-                // GUARDAMOS EL HTML DE TU JEFE EN MEMORIA
                 htmlDelJefe = serverData.html_jefe;
-
                 pageHeight = serverData.meta.page_height;
                 currentJson.positions = {};
                 
@@ -117,47 +135,149 @@
             const fileURL = URL.createObjectURL(file);
             const pdf = await pdfjsLib.getDocument(fileURL).promise;
             const page = await pdf.getPage(totalPaginas);
+            
+            // --- CÁLCULO DE ESCALA RESPONSIVE ---
+            const viewportSinEscala = page.getViewport({ scale: 1.0 });
+            // Calculamos cuánto ancho tenemos disponible en la pantalla (dejando margen)
+            const anchoDisponible = Math.min(window.innerWidth - 30, 800); 
+            // La nueva escala es el ancho de pantalla dividido por el ancho real del PDF
+            currentScale = anchoDisponible / viewportSinEscala.width;
+            
+            // Limitamos para que en monitores gigantes no se vea exageradamente grande
+            if (currentScale > 1.5) currentScale = 1.5; 
+
             const viewport = page.getViewport({ scale: currentScale }); 
             const canvas = document.getElementById('pdf-canvas');
             const context = canvas.getContext('2d');
-            canvas.width = viewport.width; canvas.height = viewport.height;
+            canvas.width = viewport.width; 
+            canvas.height = viewport.height;
             document.getElementById('visor-container').style.width = viewport.width + "px";
+            
             await page.render({ canvasContext: context, viewport: viewport }).promise;
         }
 
         function agregarFirma() {
-            let newIndex = 1; while (currentJson.positions['signer-' + newIndex]) newIndex++;
-            const signerKey = 'signer-' + newIndex;
-            currentJson.positions[signerKey] = { x: 50 + (newIndex * 10), y: pageHeight - 100 - (newIndex * 20) };
+            // 1. Preguntamos el número de orden indicando el límite
+            let inputFirma = prompt("Ingresa el NÚMERO de orden de esta firma en el flujo legal:\n(Ej: 1 para el primero en firmar, 2 para el segundo)", "1");
+            
+            // Si el usuario presiona "Cancelar" en la ventanita, detenemos todo sin molestar
+            if (inputFirma === null) return;
+            
+            // Quitamos espacios en blanco accidentales al principio o al final
+            inputFirma = inputFirma.trim();
+
+            // VALIDACIÓN ESTRICTA 1: No vacío, sin letras, sin símbolos
+            // La expresión /^\d+$/ obliga a que el contenido sean ÚNICAMENTE dígitos
+            if (inputFirma === "" || !/^\d+$/.test(inputFirma)) {
+                return alert("⚠️ Error: Debes ingresar únicamente un número entero positivo (sin letras, signos o espacios).");
+            }
+
+            // Convertimos el texto verificado a un número matemático real
+            let numeroFirma = parseInt(inputFirma, 10);
+
+            // VALIDACIÓN ESTRICTA 2: Límites (Mayor a 0 y Máximo 15)
+            if (numeroFirma < 1 || numeroFirma > 15) {
+                return alert("⚠️ Error: El número de firma debe estar entre 1 y 15.");
+            }
+
+            // CREAMOS EL ID PERFECTO PARA PHP (ej: "signer-1")
+            let signerKey = 'signer-' + numeroFirma; 
+
+            // Seguridad: Evitamos que agreguen dos veces al mismo firmante
+            if (currentJson.positions[signerKey]) {
+                return alert("⚠️ Ya agregaste las coordenadas para el firmante " + numeroFirma + ". Si quieres reubicarlo, arrastra la caja que ya existe o dale doble toque para borrarla.");
+            }
+
+            // 2. Preguntamos el nombre visual para la pantalla
+            let nombreVisible = prompt("¿Qué nombre descriptivo tiene esta firma?\n(Ej: Representante Legal, Trabajador)", "Firmante " + numeroFirma);
+            
+            // Si cancela o lo deja en blanco, le ponemos un nombre por defecto seguro
+            if (!nombreVisible || nombreVisible.trim() === "") {
+                nombreVisible = "Firmante " + numeroFirma;
+            }
+
+            // 3. Posicionamos la nueva firma en el documento
+            currentJson.positions[signerKey] = { x: 50, y: pageHeight - 150 };
             
             const box = document.createElement('div');
-            box.id = 'box-' + signerKey; box.className = 'firma-box';
-            box.innerHTML = `Firma ${newIndex} <span>(Doble clic borrar)</span>`;
+            box.id = 'box-' + signerKey; 
+            box.className = 'firma-box';
+            
+            box.innerHTML = `${nombreVisible} <br><span style="color:#2196f3; font-weight:bold;">[${signerKey}]</span><br><span>(Doble toque borrar)</span>`;
+            
             box.ondblclick = function() { box.remove(); delete currentJson.positions[signerKey]; };
+            
             document.getElementById('visor-container').appendChild(box);
-            colocarCaja(box.id, currentJson.positions[signerKey], currentScale);
+            colocarCaja(box.id, currentJson.positions[signerKey]);
         }
 
-        function colocarCaja(id, pos, scale) {
+        function colocarCaja(id, pos) {
             const box = document.getElementById(id);
-            box.style.left = (pos.x * scale) + 'px'; box.style.top = ((pageHeight - pos.y - FIRMA_H) * scale) + 'px';
-            hacerArrastrable(box, id.replace('box-', ''), scale);
+            // Aplicamos la escala matemática a la posición visual
+            box.style.left = (pos.x * currentScale) + 'px'; 
+            box.style.top = ((pageHeight - pos.y - FIRMA_H) * currentScale) + 'px';
+            hacerArrastrable(box, id.replace('box-', ''));
         }
 
-        function hacerArrastrable(elmnt, signerKey, scale) {
+        function hacerArrastrable(elmnt, signerKey) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-            elmnt.onmousedown = (e) => { e.preventDefault(); pos3 = e.clientX; pos4 = e.clientY; document.onmouseup = closeDrag; document.onmousemove = elementDrag; elmnt.style.zIndex = 10; };
-            function elementDrag(e) { e.preventDefault(); pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY; pos3 = e.clientX; pos4 = e.clientY; elmnt.style.top = (elmnt.offsetTop - pos2) + "px"; elmnt.style.left = (elmnt.offsetLeft - pos1) + "px"; currentJson.positions[signerKey].x = Math.round(elmnt.offsetLeft / scale); currentJson.positions[signerKey].y = Math.round(pageHeight - (elmnt.offsetTop / scale) - FIRMA_H); }
-            function closeDrag() { document.onmouseup = null; document.onmousemove = null; elmnt.style.zIndex = 1; }
+
+            // Soporte para MOUSE (PC)
+            elmnt.onmousedown = dragMouseDown;
+            // Soporte para TÁCTIL (Celulares y Tablets)
+            elmnt.ontouchstart = dragTouchStart;
+
+            function dragMouseDown(e) {
+                e.preventDefault();
+                pos3 = e.clientX; pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+                elmnt.style.zIndex = 10;
+            }
+
+            function dragTouchStart(e) {
+                pos3 = e.touches[0].clientX; pos4 = e.touches[0].clientY;
+                document.ontouchend = closeDragElement;
+                document.ontouchmove = touchDrag;
+                elmnt.style.zIndex = 10;
+            }
+
+            function elementDrag(e) {
+                e.preventDefault();
+                moverCaja(e.clientX, e.clientY);
+            }
+
+            function touchDrag(e) {
+                e.preventDefault(); // Evita que la pantalla haga "scroll" mientras arrastras la firma
+                moverCaja(e.touches[0].clientX, e.touches[0].clientY);
+            }
+
+            function moverCaja(clientX, clientY) {
+                pos1 = pos3 - clientX;
+                pos2 = pos4 - clientY;
+                pos3 = clientX;
+                pos4 = clientY;
+                
+                elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+                elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+
+                // Des-escalamos para guardar las coordenadas matemáticamente puras para PHP
+                currentJson.positions[signerKey].x = Math.round(elmnt.offsetLeft / currentScale);
+                currentJson.positions[signerKey].y = Math.round(pageHeight - (elmnt.offsetTop / currentScale) - FIRMA_H);
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null; document.onmousemove = null;
+                document.ontouchend = null; document.ontouchmove = null;
+                elmnt.style.zIndex = 1;
+            }
         }
 
-        // --- ENVIAMOS TODO DE VUELTA A E-DIGITAL ---
         function enviarAE_digital() {
             if (Object.keys(currentJson.positions).length === 0) {
                 return alert("⚠️ Por favor, añade al menos una firma.");
             }
 
-            // Aquí armamos el paquete final con el HTML del Jefe y las coordenadas tuyas
             const paqueteFinal = {
                 tipo: 'GUARDAR_PLANTILLA_COMPLETA',
                 datos: {
@@ -167,12 +287,22 @@
                 }
             };
 
-            // Lo enviamos a la ventana "Padre" que contiene este iframe
             window.parent.postMessage(paqueteFinal, '*');
-            
-            // Mensaje visual para ti durante la prueba
-            alert("📦 Paquete enviado a E-digital exitosamente. Revisa la consola de tu navegador.");
             console.log("PAQUETE ENVIADO:", paqueteFinal);
+
+            // --- NUEVO: Feedback visual en el botón ---
+            const btn = document.getElementById('btnGuardar');
+            const textoOriginal = btn.innerHTML;
+            
+            // Cambiamos el texto y color temporalmente
+            btn.innerHTML = "✅ ¡Actualizado y Guardado!";
+            btn.style.background = "#27ae60"; // Verde éxito
+            
+            // Volvemos a la normalidad después de 2 segundos
+            setTimeout(() => {
+                btn.innerHTML = textoOriginal;
+                btn.style.background = ""; // Vuelve al color naranja original
+            }, 2500);
         }
     </script>
 </body>

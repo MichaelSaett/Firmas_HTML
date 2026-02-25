@@ -1,13 +1,28 @@
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
 import io
+from fastapi.middleware.cors import CORSMiddleware
 
 # Imagina que el archivo de tu jefe se llama "extractor_jefe.py"
 # import extractor_jefe 
 
-app = FastAPI(title="Configurador de Firmas E-digital")
+app = FastAPI(title="Configurador de Firmas")
+
+# --- Redirección automática a la interfaz ---
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/static/index.html")
+
+# --- Configurar CORS para permitir el Iframe ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # En el futuro aquí pondrás ["https://www.e-digital.com"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Servimos la carpeta donde estará tu HTML
 app.mount("/static", StaticFiles(directory="public"), name="static")
@@ -15,6 +30,12 @@ app.mount("/static", StaticFiles(directory="public"), name="static")
 @app.post("/api/procesar")
 async def procesar_documento(documento: UploadFile = File(...)):
     try:
+        # =================================================================
+        # 🛡️ SEGURIDAD BACKEND: Rechazar de inmediato si no es un PDF
+        # =================================================================
+        if documento.content_type != "application/pdf":
+            return JSONResponse(status_code=400, content={"error": "Tipo de archivo no permitido. Solo se aceptan documentos PDF."})
+
         # 1. Leemos el PDF que subió el usuario en la web
         contenido_pdf = await documento.read()
         
