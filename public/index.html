@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (V2.0 - Solo Eje Y Invertido)</title>
+    <title>Ubicación de Firmas E-digital (V2.0 - Auto-Posición y Y Invertida)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -106,16 +105,20 @@
         let paginaActualNum = 1;
         let totalPaginasGlobal = 1;
         
-        // --- CAMBIO 1: Solo necesitamos la altura para invertir Y ---
+        // Variables globales de dimensión de página
         let pageHeight = 0;
+        let pageWidth = 0; 
         
         let currentScale = 1.0; 
         const FIRMA_H = 56; 
         const UMBRAL_MAGNETICO = 12; 
 
+        // Variable para el auto-posicionamiento
+        let lowestTextY = 100; // Guardará dónde termina el texto de la página
+
         let currentJson = { positions: {} };
         let htmlDelJefe = ""; 
-        let cantidadFirmantes = 0; 
+        let cantidadFirmantes = 0;
 
         const fileInput = document.getElementById('pdfFile');
         const fileLabel = document.getElementById('file-label');
@@ -280,8 +283,39 @@
             const page = await pdfGlobal.getPage(paginaActualNum);
             const viewportSinEscala = page.getViewport({ scale: 1.0 });
             
-            // --- CAMBIO 2: Registramos solo la altura original ---
+            pageWidth = viewportSinEscala.width; 
             pageHeight = viewportSinEscala.height; 
+
+            // MAGIA DE METADATA: Extraemos la rotación para el backend
+            if (!currentJson.metadata) currentJson.metadata = {};
+            currentJson.metadata[paginaActualNum] = {
+                rotacion: page.rotate
+            };
+
+            // --- RADAR DE TEXTO: Buscamos dónde termina el párrafo ---
+            try {
+                const textContent = await page.getTextContent();
+                let minY = pageHeight; // Empezamos desde el techo
+                
+                if (textContent.items.length > 0) {
+                    textContent.items.forEach(item => {
+                        if (item.str.trim().length > 0) {
+                            let itemY = item.transform[5];
+                            if (itemY < minY) minY = itemY; 
+                        }
+                    });
+                    // Colocamos la firma 70 píxeles por debajo de la última palabra
+                    lowestTextY = minY - 70; 
+                } else {
+                    lowestTextY = 100; 
+                }
+            } catch(e) { 
+                lowestTextY = 100; 
+            }
+            
+            // Si el texto llega muy al borde de la hoja, no dejamos que la firma se caiga
+            if (lowestTextY < 20) lowestTextY = 20;
+            // --------------------------------------------------------
 
             const anchoDisponible = Math.min(window.innerWidth - 30, 800); 
             currentScale = anchoDisponible / viewportSinEscala.width;
@@ -348,13 +382,29 @@
 
             let signerKey = 'signer-' + numeroFirma;
             
-            let cantidadActual = Object.keys(currentJson.positions).length;
-            let posicionYInicial = Math.round(pageHeight - 100 - (cantidadActual * 65));
-            if (posicionYInicial < 0) posicionYInicial = 10; 
+            // --- MATEMÁTICA DE DISTRIBUCIÓN HORIZONTAL AUTOMÁTICA ---
+            let posX = 50; 
+            let total = cantidadFirmantes; // Total de firmas que se pidieron
+            
+            if (total === 1) {
+                // Si es 1 sola firma, va exactamente al centro de la hoja
+                posX = (pageWidth - 160) / 2; 
+            } else {
+                // Si son 2 o más, dividimos la hoja en columnas y las repartimos
+                let seccion = pageWidth / (total + 1);
+                posX = (seccion * numeroFirma) - (160 / 2); // 160 es el ancho de nuestra caja verde
+            }
+
+            // Margen de seguridad para que no se salgan de los bordes
+            if (posX < 10) posX = 10;
+            if (posX > pageWidth - 170) posX = pageWidth - 170;
+
+            // --- AUTO-POSICIÓN VERTICAL DEBAJO DEL TEXTO ---
+            let posY = lowestTextY; 
             
             currentJson.positions[signerKey] = { 
-                x: 50, 
-                y: posicionYInicial, 
+                x: Math.round(posX), 
+                y: Math.round(posY), 
                 pagina: paginaActualNum 
             };
             
@@ -498,15 +548,16 @@
                 return alert(`⚠️ Te falta ubicar firmas. Llevas ${generadas} de ${cantidadFirmantes}.`);
             }
 
-            // --- CAMBIO 3: Invertimos SOLO el eje Y antes de enviarlo ya que FirmaAki lo lee de esa manera---
-            let coordenadasInvertidas = {};
+            // Creamos un objeto enriquecido con AMBAS coordenadas
+            let coordenadasCompletas = {};
             
             for (let key in currentJson.positions) {
                 let original = currentJson.positions[key];
                 
-                coordenadasInvertidas[key] = {
-                    x: original.x, // El eje X viaja normal
-                    y: Math.round(pageHeight - original.y - (FIRMA_H / currentScale)), // Eje Y invertido (Alto - Y)
+                coordenadasCompletas[key] = {
+                    x: original.x, 
+                    y: original.y, // La original (desde abajo, estándar PDF)
+                    y_invertida: Math.round(pageHeight - original.y), // La invertida (desde arriba)
                     pagina: original.pagina
                 };
             }
@@ -515,13 +566,13 @@
                 tipo: 'GUARDAR_PLANTILLA_COMPLETA',
                 datos: {
                     html_documento: htmlDelJefe,
-                    coordenadas_firmas: coordenadasInvertidas, // Enviamos el JSON ajustado
+                    coordenadas_firmas: coordenadasCompletas, 
                     total_firmas: generadas
                 }
             };
 
             window.parent.postMessage(paqueteFinal, '*');
-            console.log("PAQUETE ENVIADO AL BACKEND (Y INVERTIDA):", paqueteFinal);
+            console.log("PAQUETE ENVIADO (JSON UNIVERSAL):", paqueteFinal);
 
             const btn = document.getElementById('btnGuardar');
             btn.innerHTML = "✅ Configuración Enviada";
