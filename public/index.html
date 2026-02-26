@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital</title>
+    <title>Ubicación de Firmas E-digital (Versión JS Puro)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
     <style>
-        /* CSS Responsive */
         body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; color: #333; display: flex; flex-direction: column; align-items: center; padding: 20px 10px; margin: 0; overflow-x: hidden; }
         .panel { background: #ffffff; padding: 30px 20px; border-radius: 12px; width: 100%; max-width: 800px; box-sizing: border-box; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; border: 1px solid #e0e0e0; }
         h2 { margin-top: 0; color: #2c3e50; font-size: 24px; }
@@ -26,15 +25,15 @@
         
         .botones-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
         
-        /* Visor Responsive */
         #visor-container { display: none; margin-top: 20px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: white; max-width: 100%; overflow: hidden; }
         canvas { display: block; max-width: 100%; height: auto; }
         
-        .firma-box { position: absolute; width: 160px; height: 56px; background: rgba(46, 204, 113, 0.2); border: 2px solid #2ecc71; color: #27ae60; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; touch-action: none; text-align: center; font-size: 13px; line-height: 1.1; padding: 2px; box-sizing: border-box; }
+        .firma-box { position: absolute; width: 160px; height: 56px; background: rgba(46, 204, 113, 0.2); border: 2px solid #2ecc71; color: #27ae60; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; touch-action: none; text-align: center; line-height: 1.1; padding: 2px 4px; box-sizing: border-box; overflow: hidden; }
         .firma-box:active { cursor: grabbing; background: rgba(46, 204, 113, 0.4); }
-        .firma-box span { font-size: 9px; font-weight: normal; color: #7f8c8d; pointer-events: none; margin-top: 2px;}
+        .nombre-firma { font-size: 11px; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+        .id-firma { font-size: 9px; color: #2196f3; font-weight: bold; pointer-events: none; margin-top: 1px; }
+        .borrar-firma { font-size: 7px; font-weight: normal; color: #7f8c8d; pointer-events: none; margin-top: 1px; }
 
-        /* Ajustes para celulares pequeños */
         @media (max-width: 600px) {
             h2 { font-size: 20px; }
             button { max-width: 100%; }
@@ -58,7 +57,7 @@
             <button id="btnAgregarFirma" class="btn-add" onclick="agregarFirma()">+ Añadir Firma</button>
             <button id="btnGuardar" class="btn-save" onclick="enviarAE_digital()">💾 Guardar Configuración</button>
         </div>
-        <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">Procesando documento... ⏳</div>
+        <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">Midiendo página localmente... ⏳</div>
     </div>
 
     <div id="visor-container">
@@ -70,32 +69,48 @@
 
         let currentJson = { positions: {} };
         let pageHeight = 0;
-        let currentScale = 1.0; // Se calculará dinámicamente
-        const FIRMA_H = 50; // Altura estándar de la firma
+        let currentScale = 1.0; 
+        const FIRMA_H = 56; 
         let htmlDelJefe = ""; 
 
         const fileInput = document.getElementById('pdfFile');
         const fileLabel = document.getElementById('file-label');
         const dropArea = document.getElementById('drop-area');
 
-
-
-
+        // --- VALIDACIÓN DE ARCHIVOS ---
+        function validarArchivo(file) {
+            if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
+                alert("❌ Archivo no válido. Por favor, sube ÚNICAMENTE archivos en formato PDF.");
+                fileInput.value = ""; 
+                fileLabel.textContent = "Toca aquí o arrastra tu PDF";
+                return false;
+            }
+            let name = file.name;
+            if(name.length > 25) name = name.substring(0, 22) + '...';
+            fileLabel.textContent = "✅ " + name;
+            return true;
+        }
 
         dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
         dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
-        dropArea.addEventListener('drop', (e) => { e.preventDefault(); dropArea.classList.remove('dragover'); if(e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; actualizarNombre(); } });
-        fileInput.addEventListener('change', actualizarNombre);
+        dropArea.addEventListener('drop', (e) => { 
+            e.preventDefault(); 
+            dropArea.classList.remove('dragover'); 
+            if(e.dataTransfer.files.length) { 
+                const file = e.dataTransfer.files[0];
+                if (validarArchivo(file)) {
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    fileInput.files = dataTransfer.files; 
+                }
+            } 
+        });
 
-        function actualizarNombre() { 
-            if(fileInput.files.length > 0) {
-                // Acortar nombres largos en pantallas móviles
-                let name = fileInput.files[0].name;
-                if(name.length > 25) name = name.substring(0, 22) + '...';
-                fileLabel.textContent = "✅ " + name; 
-            }
-        }
+        fileInput.addEventListener('change', () => {
+            if(fileInput.files.length > 0) validarArchivo(fileInput.files[0]);
+        });
 
+        // --- LÓGICA DE PROCESAMIENTO (SIN PYTHON) ---
         async function procesarPDF() {
             const file = fileInput.files[0];
             if (!file) return alert("Selecciona un PDF primero.");
@@ -104,26 +119,29 @@
             document.getElementById('loader').style.display = 'block';
             document.getElementById('drop-area').style.display = 'none'; 
 
-            const formData = new FormData();
-            formData.append('documento', file);
-
             try {
-                const res = await fetch('/api/procesar', { method: 'POST', body: formData });
-                if (!res.ok) throw new Error("Error en el servidor Python.");
-                const serverData = await res.json();
+                // Leemos el PDF usando la librería localmente
+                const fileURL = URL.createObjectURL(file);
+                const pdf = await pdfjsLib.getDocument(fileURL).promise;
+                const totalPaginas = pdf.numPages;
+                const page = await pdf.getPage(totalPaginas);
                 
-                htmlDelJefe = serverData.html_jefe;
-                pageHeight = serverData.meta.page_height;
+                // Obtenemos el tamaño real de la página (equivalente a get_size_page)
+                const viewportSinEscala = page.getViewport({ scale: 1.0 });
+                pageHeight = viewportSinEscala.height; 
+                
                 currentJson.positions = {};
+                htmlDelJefe = "<div>Contenido procesado localmente.</div>"; 
                 
-                await renderizarPDF(file, serverData.meta.paginas_totales);
+                // Dibujamos el PDF en el canvas
+                await renderizarPDFLocal(page, viewportSinEscala);
                 
                 document.getElementById('visor-container').style.display = 'block';
                 document.getElementById('btnAgregarFirma').style.display = 'inline-block'; 
                 document.getElementById('btnGuardar').style.display = 'inline-block'; 
 
             } catch (err) {
-                alert("❌ " + err.message);
+                alert("❌ Error al medir el PDF: " + err.message);
                 document.getElementById('drop-area').style.display = 'block';
                 document.getElementById('btnProcesar').style.display = 'inline-block';
             } finally {
@@ -131,19 +149,9 @@
             }
         }
 
-        async function renderizarPDF(file, totalPaginas) {
-            const fileURL = URL.createObjectURL(file);
-            const pdf = await pdfjsLib.getDocument(fileURL).promise;
-            const page = await pdf.getPage(totalPaginas);
-            
-            // --- CÁLCULO DE ESCALA RESPONSIVE ---
-            const viewportSinEscala = page.getViewport({ scale: 1.0 });
-            // Calculamos cuánto ancho tenemos disponible en la pantalla (dejando margen)
+        async function renderizarPDFLocal(page, viewportSinEscala) {
             const anchoDisponible = Math.min(window.innerWidth - 30, 800); 
-            // La nueva escala es el ancho de pantalla dividido por el ancho real del PDF
             currentScale = anchoDisponible / viewportSinEscala.width;
-            
-            // Limitamos para que en monitores gigantes no se vea exageradamente grande
             if (currentScale > 1.5) currentScale = 1.5; 
 
             const viewport = page.getViewport({ scale: currentScale }); 
@@ -157,63 +165,47 @@
         }
 
         function agregarFirma() {
-            // 1. Preguntamos el número de orden indicando el límite
-            let inputFirma = prompt("Ingresa el NÚMERO de orden de esta firma en el flujo legal:\n(Ej: 1 para el primero en firmar, 2 para el segundo)", "1");
-            
-            // Si el usuario presiona "Cancelar" en la ventanita, detenemos todo sin molestar
+            let numeroSugerido = 1;
+            while (currentJson.positions['signer-' + numeroSugerido] && numeroSugerido <= 15) {
+                numeroSugerido++;
+            }
+
+            let inputFirma = prompt("Ingresa el NÚMERO de orden (1-15):", numeroSugerido);
             if (inputFirma === null) return;
-            
-            // Quitamos espacios en blanco accidentales al principio o al final
             inputFirma = inputFirma.trim();
 
-            // VALIDACIÓN ESTRICTA 1: No vacío, sin letras, sin símbolos
-            // La expresión /^\d+$/ obliga a que el contenido sean ÚNICAMENTE dígitos
             if (inputFirma === "" || !/^\d+$/.test(inputFirma)) {
-                return alert("⚠️ Error: Debes ingresar únicamente un número entero positivo (sin letras, signos o espacios).");
+                return alert("⚠️ Error: Ingresa solo números.");
             }
 
-            // Convertimos el texto verificado a un número matemático real
             let numeroFirma = parseInt(inputFirma, 10);
+            if (numeroFirma < 1 || numeroFirma > 15) return alert("⚠️ Rango 1 a 15.");
 
-            // VALIDACIÓN ESTRICTA 2: Límites (Mayor a 0 y Máximo 15)
-            if (numeroFirma < 1 || numeroFirma > 15) {
-                return alert("⚠️ Error: El número de firma debe estar entre 1 y 15.");
-            }
-
-            // CREAMOS EL ID PERFECTO PARA PHP (ej: "signer-1")
             let signerKey = 'signer-' + numeroFirma; 
+            if (currentJson.positions[signerKey]) return alert("⚠️ Ya existe.");
 
-            // Seguridad: Evitamos que agreguen dos veces al mismo firmante
-            if (currentJson.positions[signerKey]) {
-                return alert("⚠️ Ya agregaste las coordenadas para el firmante " + numeroFirma + ". Si quieres reubicarlo, arrastra la caja que ya existe o dale doble toque para borrarla.");
-            }
+            let nombreVisible = prompt("Nombre descriptivo:", "Firmante " + numeroFirma);
+            if (nombreVisible === null) return;
 
-            // 2. Preguntamos el nombre visual para la pantalla
-            let nombreVisible = prompt("¿Qué nombre descriptivo tiene esta firma?\n(Ej: Representante Legal, Trabajador)", "Firmante " + numeroFirma);
-            
-            // Si cancela o lo deja en blanco, le ponemos un nombre por defecto seguro
-            if (!nombreVisible || nombreVisible.trim() === "") {
-                nombreVisible = "Firmante " + numeroFirma;
-            }
-
-            // 3. Posicionamos la nueva firma en el documento
-            currentJson.positions[signerKey] = { x: 50, y: pageHeight - 150 };
+            // Guardamos posición matemática inicial
+            currentJson.positions[signerKey] = { x: 50, y: Math.round(pageHeight - 150) };
             
             const box = document.createElement('div');
             box.id = 'box-' + signerKey; 
             box.className = 'firma-box';
-            
-            box.innerHTML = `${nombreVisible} <br><span style="color:#2196f3; font-weight:bold;">[${signerKey}]</span><br><span>(Doble toque borrar)</span>`;
+            box.innerHTML = `
+                <div class="nombre-firma">${nombreVisible}</div> 
+                <div class="id-firma">[${signerKey}]</div>
+                <div class="borrar-firma">(Doble clic borrar)</div>
+            `;
             
             box.ondblclick = function() { box.remove(); delete currentJson.positions[signerKey]; };
-            
             document.getElementById('visor-container').appendChild(box);
             colocarCaja(box.id, currentJson.positions[signerKey]);
         }
 
         function colocarCaja(id, pos) {
             const box = document.getElementById(id);
-            // Aplicamos la escala matemática a la posición visual
             box.style.left = (pos.x * currentScale) + 'px'; 
             box.style.top = ((pageHeight - pos.y - FIRMA_H) * currentScale) + 'px';
             hacerArrastrable(box, id.replace('box-', ''));
@@ -221,10 +213,7 @@
 
         function hacerArrastrable(elmnt, signerKey) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-
-            // Soporte para MOUSE (PC)
             elmnt.onmousedown = dragMouseDown;
-            // Soporte para TÁCTIL (Celulares y Tablets)
             elmnt.ontouchstart = dragTouchStart;
 
             function dragMouseDown(e) {
@@ -248,22 +237,45 @@
             }
 
             function touchDrag(e) {
-                e.preventDefault(); // Evita que la pantalla haga "scroll" mientras arrastras la firma
+                e.preventDefault(); 
                 moverCaja(e.touches[0].clientX, e.touches[0].clientY);
-            }
-
+                    }
             function moverCaja(clientX, clientY) {
-                pos1 = pos3 - clientX;
-                pos2 = pos4 - clientY;
-                pos3 = clientX;
-                pos4 = clientY;
-                
-                elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
-                elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+                  pos1 = pos3 - clientX;
+                  pos2 = pos4 - clientY;
+                  pos3 = clientX;
+                  pos4 = clientY;
 
-                // Des-escalamos para guardar las coordenadas matemáticamente puras para PHP
-                currentJson.positions[signerKey].x = Math.round(elmnt.offsetLeft / currentScale);
-                currentJson.positions[signerKey].y = Math.round(pageHeight - (elmnt.offsetTop / currentScale) - FIRMA_H);
+                // 1. Calculamos la nueva posición teórica
+                let nuevaTop = elmnt.offsetTop - pos2;
+                    let nuevaLeft = elmnt.offsetLeft - pos1;
+
+                // 2. Obtenemos limites del contenedor (El Canvas del PDF)
+                    const container = document.getElementById('pdf-canvas');
+                    const maxTop = container.height - FIRMA_H;
+                    const maxLeft = container.width - 160; //(Ancho de la firma)
+
+                // 3. APLICAR   TOPES (No dejar que salga de 0 o del máximo)
+                // Restricción Vertical
+                        if (nuevaTop < 0) nuevaTop = 0;
+                        if (nuevaTop > maxTop) nuevaTop = maxTop;
+
+                        // Restricción Horizontal
+                        if (nuevaLeft < 0) nuevaLeft = 0;
+                        if (nuevaLeft > maxLeft) nuevaLeft = maxLeft;
+
+                // 4. Dibujamos con la posición restringida
+                elmnt.style.top = nuevaTop + "px";
+                elmnt.style.left = nuevaLeft + "px";
+
+                // 5. CÁLCULO MATEMÁTICO PARA PHP (Con el 0,0 corregido en la base)
+                // Usamos Math.max y Math.min para asegurar que el JSON nunca mande números negativos por error de redondeo
+                let xFinal = Math.round(nuevaLeft / currentScale);
+                let yFinal = Math.round(pageHeight - ((nuevaTop + FIRMA_H) / currentScale));
+
+                // Seguridad extra: si por escala da -1, lo forzamos a 0
+                currentJson.positions[signerKey].x = xFinal < 0 ? 0 : xFinal;
+                currentJson.positions[signerKey].y = yFinal < 0 ? 0 : yFinal;
             }
 
             function closeDragElement() {
@@ -274,9 +286,7 @@
         }
 
         function enviarAE_digital() {
-            if (Object.keys(currentJson.positions).length === 0) {
-                return alert("⚠️ Por favor, añade al menos una firma.");
-            }
+            if (Object.keys(currentJson.positions).length === 0) return alert("⚠️ Añade una firma.");
 
             const paqueteFinal = {
                 tipo: 'GUARDAR_PLANTILLA_COMPLETA',
@@ -290,19 +300,10 @@
             window.parent.postMessage(paqueteFinal, '*');
             console.log("PAQUETE ENVIADO:", paqueteFinal);
 
-            // --- NUEVO: Feedback visual en el botón ---
             const btn = document.getElementById('btnGuardar');
-            const textoOriginal = btn.innerHTML;
-            
-            // Cambiamos el texto y color temporalmente
-            btn.innerHTML = "✅ ¡Actualizado y Guardado!";
-            btn.style.background = "#27ae60"; // Verde éxito
-            
-            // Volvemos a la normalidad después de 2 segundos
-            setTimeout(() => {
-                btn.innerHTML = textoOriginal;
-                btn.style.background = ""; // Vuelve al color naranja original
-            }, 2500);
+            btn.innerHTML = "✅ ¡Guardado!";
+            btn.style.background = "#27ae60"; 
+            setTimeout(() => { btn.innerHTML = "💾 Guardar Configuración"; btn.style.background = ""; }, 2500);
         }
     </script>
 </body>
