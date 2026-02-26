@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (Versión JS Puro)</title>
+    <title>Ubicación de Firmas E-digital (Paso 4 - Automático)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -18,8 +18,6 @@
         
         button { background: #3498db; color: #fff; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; width: 100%; max-width: 250px; margin: 5px; }
         button:hover { background: #2980b9; transform: scale(1.02); }
-        .btn-add { background: #2ecc71; display: none; }
-        .btn-add:hover { background: #27ae60; }
         .btn-save { background: #e67e22; display: none; }
         .btn-save:hover { background: #d35400; }
         
@@ -32,7 +30,6 @@
         .firma-box:active { cursor: grabbing; background: rgba(46, 204, 113, 0.4); }
         .nombre-firma { font-size: 11px; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
         .id-firma { font-size: 9px; color: #2196f3; font-weight: bold; pointer-events: none; margin-top: 1px; }
-        .borrar-firma { font-size: 7px; font-weight: normal; color: #7f8c8d; pointer-events: none; margin-top: 1px; }
 
         @media (max-width: 600px) {
             h2 { font-size: 20px; }
@@ -44,7 +41,7 @@
 
     <div class="panel">
         <h2>Ubicación de Firmas</h2>
-        <p>Sube el documento, ubica las firmas y envía la configuración.</p>
+        <p>Sube el documento y arrastra las firmas a su lugar correspondiente.</p>
         
         <label for="pdfFile" class="upload-area" id="drop-area">
             <span style="font-size: 30px;">📄</span><br><br>
@@ -54,10 +51,9 @@
         
         <div class="botones-container">
             <button id="btnProcesar" onclick="procesarPDF()">Procesar Documento</button>
-            <button id="btnAgregarFirma" class="btn-add" onclick="agregarFirma()">+ Añadir Firma</button>
             <button id="btnGuardar" class="btn-save" onclick="enviarAE_digital()">💾 Guardar Configuración</button>
         </div>
-        <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">Midiendo página localmente... ⏳</div>
+        <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">Cargando documento... ⏳</div>
     </div>
 
     <div id="visor-container">
@@ -72,15 +68,31 @@
         let currentScale = 1.0; 
         const FIRMA_H = 56; 
         let htmlDelJefe = ""; 
+        
+        // --- NUEVA VARIABLE GLOBAL: Almacenará los datos que mande PHP ---
+        let firmantesReales = []; 
 
         const fileInput = document.getElementById('pdfFile');
         const fileLabel = document.getElementById('file-label');
         const dropArea = document.getElementById('drop-area');
 
+        // --- 1. ESCUCHAMOS AL SISTEMA PADRE (PASO 3) ---
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.tipo === 'CARGAR_FIRMANTES') {
+                firmantesReales = event.data.firmantes;
+                console.log("✅ Firmantes recibidos del Paso 3:", firmantesReales);
+                
+                // Si el usuario ya subió el PDF antes de que llegara el mensaje, generamos las firmas de golpe
+                if (pageHeight > 0) {
+                    generarCajasAutomaticas();
+                }
+            }
+        });
+
         // --- VALIDACIÓN DE ARCHIVOS ---
         function validarArchivo(file) {
             if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
-                alert("❌ Archivo no válido. Por favor, sube ÚNICAMENTE archivos en formato PDF.");
+                alert("❌ Archivo no válido. Sube ÚNICAMENTE PDF.");
                 fileInput.value = ""; 
                 fileLabel.textContent = "Toca aquí o arrastra tu PDF";
                 return false;
@@ -110,7 +122,7 @@
             if(fileInput.files.length > 0) validarArchivo(fileInput.files[0]);
         });
 
-        // --- LÓGICA DE PROCESAMIENTO (SIN PYTHON) ---
+        // --- LÓGICA DE PROCESAMIENTO ---
         async function procesarPDF() {
             const file = fileInput.files[0];
             if (!file) return alert("Selecciona un PDF primero.");
@@ -120,28 +132,29 @@
             document.getElementById('drop-area').style.display = 'none'; 
 
             try {
-                // Leemos el PDF usando la librería localmente
                 const fileURL = URL.createObjectURL(file);
                 const pdf = await pdfjsLib.getDocument(fileURL).promise;
                 const totalPaginas = pdf.numPages;
                 const page = await pdf.getPage(totalPaginas);
                 
-                // Obtenemos el tamaño real de la página (equivalente a get_size_page)
                 const viewportSinEscala = page.getViewport({ scale: 1.0 });
                 pageHeight = viewportSinEscala.height; 
                 
                 currentJson.positions = {};
                 htmlDelJefe = "<div>Contenido procesado localmente.</div>"; 
                 
-                // Dibujamos el PDF en el canvas
                 await renderizarPDFLocal(page, viewportSinEscala);
                 
                 document.getElementById('visor-container').style.display = 'block';
-                document.getElementById('btnAgregarFirma').style.display = 'inline-block'; 
                 document.getElementById('btnGuardar').style.display = 'inline-block'; 
 
+                // 2. MAGIA AUTOMÁTICA: Si PHP ya mandó los datos, dibujamos las cajas
+                if (firmantesReales.length > 0) {
+                    generarCajasAutomaticas();
+                }
+
             } catch (err) {
-                alert("❌ Error al medir el PDF: " + err.message);
+                alert("❌ Error al procesar el PDF: " + err.message);
                 document.getElementById('drop-area').style.display = 'block';
                 document.getElementById('btnProcesar').style.display = 'inline-block';
             } finally {
@@ -164,44 +177,34 @@
             await page.render({ canvasContext: context, viewport: viewport }).promise;
         }
 
-        function agregarFirma() {
-            let numeroSugerido = 1;
-            while (currentJson.positions['signer-' + numeroSugerido] && numeroSugerido <= 15) {
-                numeroSugerido++;
-            }
+        // --- 3. FUNCIÓN GENERADORA AUTOMÁTICA ---
+        function generarCajasAutomaticas() {
+            // Limpiamos el mapa actual
+            document.querySelectorAll('.firma-box').forEach(box => box.remove());
+            currentJson.positions = {};
 
-            let inputFirma = prompt("Ingresa el NÚMERO de orden (1-15):", numeroSugerido);
-            if (inputFirma === null) return;
-            inputFirma = inputFirma.trim();
-
-            if (inputFirma === "" || !/^\d+$/.test(inputFirma)) {
-                return alert("⚠️ Error: Ingresa solo números.");
-            }
-
-            let numeroFirma = parseInt(inputFirma, 10);
-            if (numeroFirma < 1 || numeroFirma > 15) return alert("⚠️ Rango 1 a 15.");
-
-            let signerKey = 'signer-' + numeroFirma; 
-            if (currentJson.positions[signerKey]) return alert("⚠️ Ya existe.");
-
-            let nombreVisible = prompt("Nombre descriptivo:", "Firmante " + numeroFirma);
-            if (nombreVisible === null) return;
-
-            // Guardamos posición matemática inicial
-            currentJson.positions[signerKey] = { x: 50, y: Math.round(pageHeight - 150) };
-            
-            const box = document.createElement('div');
-            box.id = 'box-' + signerKey; 
-            box.className = 'firma-box';
-            box.innerHTML = `
-                <div class="nombre-firma">${nombreVisible}</div> 
-                <div class="id-firma">[${signerKey}]</div>
-                <div class="borrar-firma">(Doble clic borrar)</div>
-            `;
-            
-            box.ondblclick = function() { box.remove(); delete currentJson.positions[signerKey]; };
-            document.getElementById('visor-container').appendChild(box);
-            colocarCaja(box.id, currentJson.positions[signerKey]);
+            firmantesReales.forEach((firmante, index) => {
+                let signerKey = 'signer-' + firmante.id;
+                
+                // Posición inicial en cascada para que no se superpongan
+                let posicionYInicial = Math.round(pageHeight - 100 - (index * 65));
+                if (posicionYInicial < 0) posicionYInicial = 10; // Tope de seguridad
+                
+                currentJson.positions[signerKey] = { x: 50, y: posicionYInicial };
+                
+                const box = document.createElement('div');
+                box.id = 'box-' + signerKey; 
+                box.className = 'firma-box';
+                
+                // Imprimimos el nombre real y el rol que viene desde PHP
+                box.innerHTML = `
+                    <div class="nombre-firma">${firmante.nombre}</div> 
+                    <div class="id-firma">[${firmante.rol}]</div>
+                `;
+                
+                document.getElementById('visor-container').appendChild(box);
+                colocarCaja(box.id, currentJson.positions[signerKey]);
+            });
         }
 
         function colocarCaja(id, pos) {
@@ -239,41 +242,32 @@
             function touchDrag(e) {
                 e.preventDefault(); 
                 moverCaja(e.touches[0].clientX, e.touches[0].clientY);
-                    }
+            }
+
             function moverCaja(clientX, clientY) {
-                  pos1 = pos3 - clientX;
-                  pos2 = pos4 - clientY;
-                  pos3 = clientX;
-                  pos4 = clientY;
+                pos1 = pos3 - clientX;
+                pos2 = pos4 - clientY;
+                pos3 = clientX;
+                pos4 = clientY;
 
-                // 1. Calculamos la nueva posición teórica
                 let nuevaTop = elmnt.offsetTop - pos2;
-                    let nuevaLeft = elmnt.offsetLeft - pos1;
+                let nuevaLeft = elmnt.offsetLeft - pos1;
 
-                // 2. Obtenemos limites del contenedor (El Canvas del PDF)
-                    const container = document.getElementById('pdf-canvas');
-                    const maxTop = container.height - FIRMA_H;
-                    const maxLeft = container.width - 160; //(Ancho de la firma)
+                const container = document.getElementById('pdf-canvas');
+                const maxTop = container.height - FIRMA_H;
+                const maxLeft = container.width - 160; 
 
-                // 3. APLICAR   TOPES (No dejar que salga de 0 o del máximo)
-                // Restricción Vertical
-                        if (nuevaTop < 0) nuevaTop = 0;
-                        if (nuevaTop > maxTop) nuevaTop = maxTop;
+                if (nuevaTop < 0) nuevaTop = 0;
+                if (nuevaTop > maxTop) nuevaTop = maxTop;
+                if (nuevaLeft < 0) nuevaLeft = 0;
+                if (nuevaLeft > maxLeft) nuevaLeft = maxLeft;
 
-                        // Restricción Horizontal
-                        if (nuevaLeft < 0) nuevaLeft = 0;
-                        if (nuevaLeft > maxLeft) nuevaLeft = maxLeft;
-
-                // 4. Dibujamos con la posición restringida
                 elmnt.style.top = nuevaTop + "px";
                 elmnt.style.left = nuevaLeft + "px";
 
-                // 5. CÁLCULO MATEMÁTICO PARA PHP (Con el 0,0 corregido en la base)
-                // Usamos Math.max y Math.min para asegurar que el JSON nunca mande números negativos por error de redondeo
                 let xFinal = Math.round(nuevaLeft / currentScale);
                 let yFinal = Math.round(pageHeight - ((nuevaTop + FIRMA_H) / currentScale));
 
-                // Seguridad extra: si por escala da -1, lo forzamos a 0
                 currentJson.positions[signerKey].x = xFinal < 0 ? 0 : xFinal;
                 currentJson.positions[signerKey].y = yFinal < 0 ? 0 : yFinal;
             }
@@ -286,7 +280,7 @@
         }
 
         function enviarAE_digital() {
-            if (Object.keys(currentJson.positions).length === 0) return alert("⚠️ Añade una firma.");
+            if (Object.keys(currentJson.positions).length === 0) return alert("⚠️ No hay firmas generadas para guardar.");
 
             const paqueteFinal = {
                 tipo: 'GUARDAR_PLANTILLA_COMPLETA',
@@ -298,7 +292,7 @@
             };
 
             window.parent.postMessage(paqueteFinal, '*');
-            console.log("PAQUETE ENVIADO:", paqueteFinal);
+            console.log("PAQUETE ENVIADO AL PADRE:", paqueteFinal);
 
             const btn = document.getElementById('btnGuardar');
             btn.innerHTML = "✅ ¡Guardado!";
