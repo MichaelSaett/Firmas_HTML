@@ -74,27 +74,43 @@
         const FIRMA_H = 56; 
         let htmlDelJefe = ""; 
         
-        // --- CONTROLADORES DE CANTIDAD ---
         let cantidadFirmantes = 0; 
-        let firmasGeneradas = 0; // Llevará la cuenta de las que hemos sacado
+        let firmasGeneradas = 0; 
 
         const fileInput = document.getElementById('pdfFile');
         const fileLabel = document.getElementById('file-label');
         const dropArea = document.getElementById('drop-area');
 
-        // --- ESCUCHA DE DATOS DEL PADRE ---
+        // --- ESCUCHA DE DATOS DEL PADRE CON LÍMITES (1 a 15) ---
         window.addEventListener('message', function(event) {
             if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
-                cantidadFirmantes = parseInt(event.data.cantidad) || 0;
-                firmasGeneradas = 0; // Reiniciamos el contador
-                console.log("✅ Cantidad de firmantes recibida del backend:", cantidadFirmantes);
+                let cantidadRecibida = parseInt(event.data.cantidad) || 0;
                 
-                // Si el PDF ya estaba cargado, mostramos el botón con el formato (0/X)
+                // 1. Límite Inferior (No puede ser 0 ni negativo)
+                if (cantidadRecibida <= 0) {
+                    alert("⚠️ Error: El documento debe tener al menos 1 firma asignada. Verifica la configuración en el paso anterior.");
+                    cantidadFirmantes = 0;
+                    document.getElementById('btnGenerar').style.display = 'none';
+                    return; // Bloqueamos el proceso aquí
+                }
+
+                // 2. Límite Superior (Máximo 15)
+                if (cantidadRecibida > 15) {
+                    alert("⚠️ Se solicitó un número mayor a 15 firmas. El sistema lo ajustará al límite máximo permitido (15).");
+                    cantidadFirmantes = 15;
+                } else {
+                    cantidadFirmantes = cantidadRecibida;
+                }
+
+                firmasGeneradas = 0; // Reiniciamos el contador
+                console.log("✅ Cantidad de firmantes configurada:", cantidadFirmantes);
+                
+                // Si el PDF ya estaba cargado, mostramos el botón
                 if (pageHeight > 0 && cantidadFirmantes > 0) {
                     const btnGen = document.getElementById('btnGenerar');
                     btnGen.style.display = 'inline-block';
                     btnGen.innerHTML = `2. Añadir Firma (0/${cantidadFirmantes})`;
-                    btnGen.style.background = "#2ecc71"; // Restaurar a color verde
+                    btnGen.style.background = "#2ecc71"; 
                 }
             }
         });
@@ -148,7 +164,6 @@
                 const viewportSinEscala = page.getViewport({ scale: 1.0 });
                 pageHeight = viewportSinEscala.height; 
                 
-                // Limpieza por si está reprocesando un documento
                 document.querySelectorAll('.firma-box').forEach(box => box.remove());
                 currentJson.positions = {};
                 htmlDelJefe = "<div>Contenido procesado localmente.</div>"; 
@@ -158,15 +173,14 @@
                 document.getElementById('visor-container').style.display = 'block';
                 document.getElementById('btnGuardar').style.display = 'inline-block'; 
 
-                // Habilitamos el botón solo si el Backend ya mandó la cantidad
                 if (cantidadFirmantes > 0) {
-                    firmasGeneradas = 0; // Reiniciamos
+                    firmasGeneradas = 0; 
                     const btnGen = document.getElementById('btnGenerar');
                     btnGen.style.display = 'inline-block';
-                    btnGen.innerHTML = `2. Añadir Firma (0/${cantidadFirmantes})`;
-                    btnGen.style.background = "#2ecc71"; // Verde original
+                    btnGen.innerHTML = `2. ➕ Añadir Firma (0/${cantidadFirmantes})`;
+                    btnGen.style.background = "#2ecc71"; 
                 } else {
-                    console.warn("ℹ️ Esperando a que el sistema padre envíe la cantidad de firmantes...");
+                    console.warn("ℹ️ Esperando a que el sistema padre envíe la cantidad de firmantes válidos...");
                 }
 
             } catch (err) {
@@ -193,19 +207,16 @@
             await page.render({ canvasContext: context, viewport: viewport }).promise;
         }
 
-        // --- FUNCIÓN QUE AGREGA FIRMAS UNA POR UNA ---
         function agregarSiguienteFirma() {
-            // Verificamos si ya llegamos al límite
             if (firmasGeneradas >= cantidadFirmantes) {
-                return; // Ya no hace nada si ya se generaron todas
+                return; 
             }
 
-            // Aumentamos el contador
             firmasGeneradas++;
 
             let signerKey = 'signer-' + firmasGeneradas;
             
-            // Calculamos la posición en Y (cada firma aparecerá un poco más arriba para no ocultarse si el usuario no la mueve)
+            // Calculamos la posición en Y
             let posicionYInicial = Math.round(pageHeight - 100 - ((firmasGeneradas - 1) * 65));
             if (posicionYInicial < 0) posicionYInicial = 10; 
             
@@ -222,11 +233,10 @@
             document.getElementById('visor-container').appendChild(box);
             colocarCaja(box.id, currentJson.positions[signerKey]);
 
-            // --- ACTUALIZAR EL ESTADO DEL BOTÓN ---
             const btnGen = document.getElementById('btnGenerar');
             if (firmasGeneradas === cantidadFirmantes) {
                 btnGen.innerHTML = "✅ Firmas Generadas";
-                btnGen.style.background = "#95a5a6"; // Gris para indicar que finalizó
+                btnGen.style.background = "#95a5a6"; 
             } else {
                 btnGen.innerHTML = `2. Añadir Firma (${firmasGeneradas}/${cantidadFirmantes})`;
             }
@@ -305,7 +315,6 @@
         }
 
         function enviarAE_digital() {
-            // Verificamos que haya sacado todas las firmas necesarias antes de guardar
             if (firmasGeneradas < cantidadFirmantes) {
                 return alert(`⚠️ Te falta ubicar firmas. Llevas ${firmasGeneradas} de ${cantidadFirmantes}.`);
             }
