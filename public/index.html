@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital</title>
+    <title>Ubicación de Firmas E-digital (V2.0 - Paginación y Guías)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -16,17 +16,23 @@
         .upload-area:hover, .upload-area.dragover { border-color: #3498db; background: #ebf5fb; }
         #pdfFile { display: none; }
         
-        button { background: #3498db; color: #fff; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; width: 100%; max-width: 250px; margin: 5px; }
+        button { background: #3498db; color: #fff; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; margin: 5px; }
         button:hover { background: #2980b9; transform: scale(1.02); }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
         
         .btn-add-auto { background: #2ecc71; display: none; }
         .btn-add-auto:hover { background: #27ae60; }
-        
         .btn-save { background: #e67e22; display: none; }
         .btn-save:hover { background: #d35400; }
         
         .botones-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
         
+        /* Controles de Paginación */
+        #paginacion-container { display: none; align-items: center; justify-content: center; gap: 15px; margin-top: 15px; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
+        .btn-pagina { padding: 8px 15px; background: #34495e; font-size: 14px; width: auto; }
+        .btn-pagina:hover { background: #2c3e50; }
+        .texto-pagina { font-weight: bold; color: #2c3e50; font-size: 16px; }
+
         #visor-container { display: none; margin-top: 20px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: white; max-width: 100%; overflow: hidden; }
         canvas { display: block; max-width: 100%; height: auto; }
         
@@ -35,9 +41,16 @@
         .nombre-firma { font-size: 11px; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
         .id-firma { font-size: 9px; color: #2196f3; font-weight: bold; pointer-events: none; margin-top: 1px; }
 
+        /* Guías magnéticas (Líneas rojas) */
+        .guia-magnetica { position: absolute; background-color: #e74c3c; display: none; pointer-events: none; z-index: 5; opacity: 0.8; }
+        #guia-v { width: 1.5px; height: 100%; top: 0; }
+        #guia-h { height: 1.5px; width: 100%; left: 0; }
+
         @media (max-width: 600px) {
             h2 { font-size: 20px; }
-            button { max-width: 100%; }
+            button { width: 100%; }
+            #paginacion-container { flex-direction: column; }
+            .btn-pagina { width: 100%; }
         }
     </style>
 </head>
@@ -45,7 +58,7 @@
 
     <div class="panel">
         <h2>Ubicación de Firmas</h2>
-        <p>Sube el documento, procesa y añade las cajas una por una para ubicarlas.</p>
+        <p>Sube el documento, navega por las páginas y ubica las firmas (se alinearán solas).</p>
         
         <label for="pdfFile" class="upload-area" id="drop-area">
             <span style="font-size: 30px;">📄</span><br><br>
@@ -58,22 +71,36 @@
             <button id="btnGenerar" class="btn-add-auto" onclick="agregarSiguienteFirma()">2. Añadir Firma</button>
             <button id="btnGuardar" class="btn-save" onclick="enviarAE_digital()">3. 💾 Guardar Configuración</button>
         </div>
+        
+        <div id="paginacion-container">
+            <button class="btn-pagina" id="btnAnterior" onclick="cambiarPagina(-1)">◀ Anterior</button>
+            <span class="texto-pagina">Página <span id="num-pagina">1</span> de <span id="total-paginas">1</span></span>
+            <button class="btn-pagina" id="btnSiguiente" onclick="cambiarPagina(1)">Siguiente ▶</button>
+        </div>
+
         <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">Cargando documento... ⏳</div>
     </div>
 
     <div id="visor-container">
         <canvas id="pdf-canvas"></canvas>
+        <div id="guia-v" class="guia-magnetica"></div>
+        <div id="guia-h" class="guia-magnetica"></div>
     </div>
 
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        let currentJson = { positions: {} };
+        // --- ESTADO DEL DOCUMENTO ---
+        let pdfGlobal = null;
+        let paginaActualNum = 1;
+        let totalPaginasGlobal = 1;
         let pageHeight = 0;
         let currentScale = 1.0; 
         const FIRMA_H = 56; 
+        const UMBRAL_MAGNETICO = 12; // A cuántos píxeles de distancia se "pegan" las firmas
+
+        let currentJson = { positions: {} };
         let htmlDelJefe = ""; 
-        
         let cantidadFirmantes = 0; 
         let firmasGeneradas = 0; 
 
@@ -81,32 +108,28 @@
         const fileLabel = document.getElementById('file-label');
         const dropArea = document.getElementById('drop-area');
 
-        // --- ESCUCHA DE DATOS DEL PADRE CON LÍMITES (1 a 15) ---
+        // --- ESCUCHA DE DATOS DEL PADRE ---
         window.addEventListener('message', function(event) {
             if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
                 let cantidadRecibida = parseInt(event.data.cantidad) || 0;
                 
-                // 1. Límite Inferior (No puede ser 0 ni negativo)
                 if (cantidadRecibida <= 0) {
-                    alert("⚠️ Error: El documento debe tener al menos 1 firma asignada. Verifica la configuración en el paso anterior.");
+                    alert("⚠️ Error: El documento debe tener al menos 1 firma asignada.");
                     cantidadFirmantes = 0;
                     document.getElementById('btnGenerar').style.display = 'none';
-                    return; // Bloqueamos el proceso aquí
+                    return; 
                 }
 
-                // 2. Límite Superior (Máximo 15)
                 if (cantidadRecibida > 15) {
-                    alert("⚠️ Se solicitó un número mayor a 15 firmas. El sistema lo ajustará al límite máximo permitido (15).");
+                    alert("⚠️ Se limitó a 15 firmas máximas permitidas.");
                     cantidadFirmantes = 15;
                 } else {
                     cantidadFirmantes = cantidadRecibida;
                 }
 
-                firmasGeneradas = 0; // Reiniciamos el contador
-                console.log("✅ Cantidad de firmantes configurada:", cantidadFirmantes);
+                firmasGeneradas = 0; 
                 
-                // Si el PDF ya estaba cargado, mostramos el botón
-                if (pageHeight > 0 && cantidadFirmantes > 0) {
+                if (pdfGlobal !== null && cantidadFirmantes > 0) {
                     const btnGen = document.getElementById('btnGenerar');
                     btnGen.style.display = 'inline-block';
                     btnGen.innerHTML = `2. Añadir Firma (0/${cantidadFirmantes})`;
@@ -118,8 +141,6 @@
         function validarArchivo(file) {
             if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
                 alert("❌ Formato no válido. Sube un PDF.");
-                fileInput.value = ""; 
-                fileLabel.textContent = "Toca aquí o arrastra tu PDF";
                 return false;
             }
             let name = file.name;
@@ -128,24 +149,7 @@
             return true;
         }
 
-        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
-        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
-        dropArea.addEventListener('drop', (e) => { 
-            e.preventDefault(); 
-            dropArea.classList.remove('dragover'); 
-            if(e.dataTransfer.files.length) { 
-                const file = e.dataTransfer.files[0];
-                if (validarArchivo(file)) {
-                    const dataTransfer = new DataTransfer();
-                    dataTransfer.items.add(file);
-                    fileInput.files = dataTransfer.files; 
-                }
-            } 
-        });
-
-        fileInput.addEventListener('change', () => {
-            if(fileInput.files.length > 0) validarArchivo(fileInput.files[0]);
-        });
+        fileInput.addEventListener('change', () => { if(fileInput.files.length > 0) validarArchivo(fileInput.files[0]); });
 
         async function procesarPDF() {
             const file = fileInput.files[0];
@@ -157,21 +161,22 @@
 
             try {
                 const fileURL = URL.createObjectURL(file);
-                const pdf = await pdfjsLib.getDocument(fileURL).promise;
-                const totalPaginas = pdf.numPages;
-                const page = await pdf.getPage(totalPaginas);
+                pdfGlobal = await pdfjsLib.getDocument(fileURL).promise;
+                totalPaginasGlobal = pdfGlobal.numPages;
+                paginaActualNum = 1; // Ahora empezamos desde la página 1
                 
-                const viewportSinEscala = page.getViewport({ scale: 1.0 });
-                pageHeight = viewportSinEscala.height; 
+                document.getElementById('total-paginas').innerText = totalPaginasGlobal;
                 
                 document.querySelectorAll('.firma-box').forEach(box => box.remove());
                 currentJson.positions = {};
                 htmlDelJefe = "<div>Contenido procesado localmente.</div>"; 
                 
-                await renderizarPDFLocal(page, viewportSinEscala);
+                await renderizarPaginaActual();
                 
                 document.getElementById('visor-container').style.display = 'block';
+                document.getElementById('paginacion-container').style.display = 'flex';
                 document.getElementById('btnGuardar').style.display = 'inline-block'; 
+                actualizarBotonesPaginacion();
 
                 if (cantidadFirmantes > 0) {
                     firmasGeneradas = 0; 
@@ -179,8 +184,6 @@
                     btnGen.style.display = 'inline-block';
                     btnGen.innerHTML = `2. ➕ Añadir Firma (0/${cantidadFirmantes})`;
                     btnGen.style.background = "#2ecc71"; 
-                } else {
-                    console.warn("ℹ️ Esperando a que el sistema padre envíe la cantidad de firmantes válidos...");
                 }
 
             } catch (err) {
@@ -192,7 +195,28 @@
             }
         }
 
-        async function renderizarPDFLocal(page, viewportSinEscala) {
+        // --- SISTEMA DE PAGINACIÓN ---
+        async function cambiarPagina(delta) {
+            let nuevaPagina = paginaActualNum + delta;
+            if (nuevaPagina >= 1 && nuevaPagina <= totalPaginasGlobal) {
+                paginaActualNum = nuevaPagina;
+                await renderizarPaginaActual();
+                actualizarBotonesPaginacion();
+                actualizarVisibilidadFirmas(); // Solo muestra las firmas de la página actual
+            }
+        }
+
+        function actualizarBotonesPaginacion() {
+            document.getElementById('num-pagina').innerText = paginaActualNum;
+            document.getElementById('btnAnterior').disabled = (paginaActualNum <= 1);
+            document.getElementById('btnSiguiente').disabled = (paginaActualNum >= totalPaginasGlobal);
+        }
+
+        async function renderizarPaginaActual() {
+            const page = await pdfGlobal.getPage(paginaActualNum);
+            const viewportSinEscala = page.getViewport({ scale: 1.0 });
+            pageHeight = viewportSinEscala.height; 
+
             const anchoDisponible = Math.min(window.innerWidth - 30, 800); 
             currentScale = anchoDisponible / viewportSinEscala.width;
             if (currentScale > 1.5) currentScale = 1.5; 
@@ -205,22 +229,46 @@
             document.getElementById('visor-container').style.width = viewport.width + "px";
             
             await page.render({ canvasContext: context, viewport: viewport }).promise;
+            reposicionarFirmasPorEscala();
         }
 
+        function actualizarVisibilidadFirmas() {
+            document.querySelectorAll('.firma-box').forEach(box => {
+                let key = box.id.replace('box-', '');
+                // Si la firma pertenece a la página actual, se muestra. Si no, se oculta.
+                if (currentJson.positions[key] && currentJson.positions[key].pagina === paginaActualNum) {
+                    box.style.display = 'flex';
+                } else {
+                    box.style.display = 'none';
+                }
+            });
+        }
+
+        function reposicionarFirmasPorEscala() {
+            document.querySelectorAll('.firma-box').forEach(box => {
+                let key = box.id.replace('box-', '');
+                if (currentJson.positions[key] && currentJson.positions[key].pagina === paginaActualNum) {
+                    colocarCaja(box.id, currentJson.positions[key]);
+                }
+            });
+        }
+
+        // --- AÑADIR FIRMAS (AHORA CON PÁGINA ASIGNADA) ---
         function agregarSiguienteFirma() {
-            if (firmasGeneradas >= cantidadFirmantes) {
-                return; 
-            }
+            if (firmasGeneradas >= cantidadFirmantes) return; 
 
             firmasGeneradas++;
-
             let signerKey = 'signer-' + firmasGeneradas;
             
-            // Calculamos la posición en Y
             let posicionYInicial = Math.round(pageHeight - 100 - ((firmasGeneradas - 1) * 65));
             if (posicionYInicial < 0) posicionYInicial = 10; 
             
-            currentJson.positions[signerKey] = { x: 50, y: posicionYInicial };
+            // ¡NUEVO! Guardamos en qué página se soltó la firma
+            currentJson.positions[signerKey] = { 
+                x: 50, 
+                y: posicionYInicial, 
+                pagina: paginaActualNum 
+            };
             
             const box = document.createElement('div');
             box.id = 'box-' + signerKey; 
@@ -249,8 +297,12 @@
             hacerArrastrable(box, id.replace('box-', ''));
         }
 
+        // --- SISTEMA DE ARRASTRE Y ALINEACIÓN MAGNÉTICA ---
         function hacerArrastrable(elmnt, signerKey) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            const guiaV = document.getElementById('guia-v');
+            const guiaH = document.getElementById('guia-h');
+
             elmnt.onmousedown = dragMouseDown;
             elmnt.ontouchstart = dragTouchStart;
 
@@ -269,15 +321,8 @@
                 elmnt.style.zIndex = 10;
             }
 
-            function elementDrag(e) {
-                e.preventDefault();
-                moverCaja(e.clientX, e.clientY);
-            }
-
-            function touchDrag(e) {
-                e.preventDefault(); 
-                moverCaja(e.touches[0].clientX, e.touches[0].clientY);
-            }
+            function elementDrag(e) { e.preventDefault(); moverCaja(e.clientX, e.clientY); }
+            function touchDrag(e) { e.preventDefault(); moverCaja(e.touches[0].clientX, e.touches[0].clientY); }
 
             function moverCaja(clientX, clientY) {
                 pos1 = pos3 - clientX;
@@ -292,25 +337,61 @@
                 const maxTop = container.height - FIRMA_H;
                 const maxLeft = container.width - 160; 
 
+                // Límites de la página
                 if (nuevaTop < 0) nuevaTop = 0;
                 if (nuevaTop > maxTop) nuevaTop = maxTop;
                 if (nuevaLeft < 0) nuevaLeft = 0;
                 if (nuevaLeft > maxLeft) nuevaLeft = maxLeft;
 
+                // --- MAGIA: ALINEACIÓN MAGNÉTICA (SNAP TO GRID) ---
+                let snapV = false, snapH = false;
+                
+                // Buscamos todas las demás cajas en esta página para alinearnos
+                document.querySelectorAll('.firma-box').forEach(otraCaja => {
+                    if (otraCaja.id !== elmnt.id && otraCaja.style.display !== 'none') {
+                        let otraTop = otraCaja.offsetTop;
+                        let otraLeft = otraCaja.offsetLeft;
+
+                        // Alineación Vertical (Columna)
+                        if (Math.abs(nuevaLeft - otraLeft) < UMBRAL_MAGNETICO) {
+                            nuevaLeft = otraLeft; 
+                            snapV = true;
+                            guiaV.style.left = nuevaLeft + "px";
+                            guiaV.style.display = "block";
+                        }
+                        // Alineación Horizontal (Fila)
+                        if (Math.abs(nuevaTop - otraTop) < UMBRAL_MAGNETICO) {
+                            nuevaTop = otraTop; 
+                            snapH = true;
+                            guiaH.style.top = nuevaTop + "px";
+                            guiaH.style.display = "block";
+                        }
+                    }
+                });
+
+                if (!snapV) guiaV.style.display = "none";
+                if (!snapH) guiaH.style.display = "none";
+
                 elmnt.style.top = nuevaTop + "px";
                 elmnt.style.left = nuevaLeft + "px";
 
+                // Guardar coordenadas matemáticas actualizadas (ahora incluye la página actual)
                 let xFinal = Math.round(nuevaLeft / currentScale);
                 let yFinal = Math.round(pageHeight - ((nuevaTop + FIRMA_H) / currentScale));
 
                 currentJson.positions[signerKey].x = Math.max(0, xFinal);
                 currentJson.positions[signerKey].y = Math.max(0, yFinal);
+                // Si la movió en una página distinta a donde se creó, se actualiza
+                currentJson.positions[signerKey].pagina = paginaActualNum; 
             }
 
             function closeDragElement() {
                 document.onmouseup = null; document.onmousemove = null;
                 document.ontouchend = null; document.ontouchmove = null;
                 elmnt.style.zIndex = 1;
+                // Ocultar líneas rojas al soltar el mouse
+                guiaV.style.display = "none";
+                guiaH.style.display = "none";
             }
         }
 
@@ -331,7 +412,7 @@
             };
 
             window.parent.postMessage(paqueteFinal, '*');
-            console.log("PAQUETE ENVIADO:", paqueteFinal);
+            console.log("PAQUETE ENVIADO AL BACKEND:", paqueteFinal);
 
             const btn = document.getElementById('btnGuardar');
             btn.innerHTML = "✅ Configuración Enviada";
