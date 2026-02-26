@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (V2.0 - Imán Corregido)</title>
+    <title>Ubicación de Firmas E-digital (V2.0 - Solo Eje Y Invertido)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -104,7 +105,10 @@
         let pdfGlobal = null;
         let paginaActualNum = 1;
         let totalPaginasGlobal = 1;
+        
+        // --- CAMBIO 1: Solo necesitamos la altura para invertir Y ---
         let pageHeight = 0;
+        
         let currentScale = 1.0; 
         const FIRMA_H = 56; 
         const UMBRAL_MAGNETICO = 12; 
@@ -275,6 +279,8 @@
         async function renderizarPaginaActual() {
             const page = await pdfGlobal.getPage(paginaActualNum);
             const viewportSinEscala = page.getViewport({ scale: 1.0 });
+            
+            // --- CAMBIO 2: Registramos solo la altura original ---
             pageHeight = viewportSinEscala.height; 
 
             const anchoDisponible = Math.min(window.innerWidth - 30, 800); 
@@ -492,17 +498,30 @@
                 return alert(`⚠️ Te falta ubicar firmas. Llevas ${generadas} de ${cantidadFirmantes}.`);
             }
 
+            // --- CAMBIO 3: Invertimos SOLO el eje Y antes de enviarlo ya que FirmaAki lo lee de esa manera---
+            let coordenadasInvertidas = {};
+            
+            for (let key in currentJson.positions) {
+                let original = currentJson.positions[key];
+                
+                coordenadasInvertidas[key] = {
+                    x: original.x, // El eje X viaja normal
+                    y: Math.round(pageHeight - original.y - (FIRMA_H / currentScale)), // Eje Y invertido (Alto - Y)
+                    pagina: original.pagina
+                };
+            }
+
             const paqueteFinal = {
                 tipo: 'GUARDAR_PLANTILLA_COMPLETA',
                 datos: {
                     html_documento: htmlDelJefe,
-                    coordenadas_firmas: currentJson.positions,
+                    coordenadas_firmas: coordenadasInvertidas, // Enviamos el JSON ajustado
                     total_firmas: generadas
                 }
             };
 
             window.parent.postMessage(paqueteFinal, '*');
-            console.log("PAQUETE ENVIADO AL BACKEND:", paqueteFinal);
+            console.log("PAQUETE ENVIADO AL BACKEND (Y INVERTIDA):", paqueteFinal);
 
             const btn = document.getElementById('btnGuardar');
             btn.innerHTML = "✅ Configuración Enviada";
