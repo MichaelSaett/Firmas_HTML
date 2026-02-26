@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (Paso 4 - Automático)</title>
+    <title>Ubicación de Firmas E-digital</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -18,6 +18,10 @@
         
         button { background: #3498db; color: #fff; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; width: 100%; max-width: 250px; margin: 5px; }
         button:hover { background: #2980b9; transform: scale(1.02); }
+        
+        .btn-add-auto { background: #2ecc71; display: none; }
+        .btn-add-auto:hover { background: #27ae60; }
+        
         .btn-save { background: #e67e22; display: none; }
         .btn-save:hover { background: #d35400; }
         
@@ -41,7 +45,7 @@
 
     <div class="panel">
         <h2>Ubicación de Firmas</h2>
-        <p>Sube el documento y arrastra las firmas a su lugar correspondiente.</p>
+        <p>Sube el documento, procesa y añade las cajas una por una para ubicarlas.</p>
         
         <label for="pdfFile" class="upload-area" id="drop-area">
             <span style="font-size: 30px;">📄</span><br><br>
@@ -50,8 +54,9 @@
         <input type="file" id="pdfFile" accept="application/pdf">
         
         <div class="botones-container">
-            <button id="btnProcesar" onclick="procesarPDF()">Procesar Documento</button>
-            <button id="btnGuardar" class="btn-save" onclick="enviarAE_digital()">💾 Guardar Configuración</button>
+            <button id="btnProcesar" onclick="procesarPDF()">1. Procesar Documento</button>
+            <button id="btnGenerar" class="btn-add-auto" onclick="agregarSiguienteFirma()">2. Añadir Firma</button>
+            <button id="btnGuardar" class="btn-save" onclick="enviarAE_digital()">3. 💾 Guardar Configuración</button>
         </div>
         <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">Cargando documento... ⏳</div>
     </div>
@@ -69,30 +74,34 @@
         const FIRMA_H = 56; 
         let htmlDelJefe = ""; 
         
-        // --- NUEVA VARIABLE GLOBAL: Almacenará los datos que mande PHP ---
-        let firmantesReales = []; 
+        // --- CONTROLADORES DE CANTIDAD ---
+        let cantidadFirmantes = 0; 
+        let firmasGeneradas = 0; // Llevará la cuenta de las que hemos sacado
 
         const fileInput = document.getElementById('pdfFile');
         const fileLabel = document.getElementById('file-label');
         const dropArea = document.getElementById('drop-area');
 
-        // --- 1. ESCUCHAMOS AL SISTEMA PADRE (PASO 3) ---
+        // --- ESCUCHA DE DATOS DEL PADRE ---
         window.addEventListener('message', function(event) {
-            if (event.data && event.data.tipo === 'CARGAR_FIRMANTES') {
-                firmantesReales = event.data.firmantes;
-                console.log("✅ Firmantes recibidos del Paso 3:", firmantesReales);
+            if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
+                cantidadFirmantes = parseInt(event.data.cantidad) || 0;
+                firmasGeneradas = 0; // Reiniciamos el contador
+                console.log("✅ Cantidad de firmantes recibida del backend:", cantidadFirmantes);
                 
-                // Si el usuario ya subió el PDF antes de que llegara el mensaje, generamos las firmas de golpe
-                if (pageHeight > 0) {
-                    generarCajasAutomaticas();
+                // Si el PDF ya estaba cargado, mostramos el botón con el formato (0/X)
+                if (pageHeight > 0 && cantidadFirmantes > 0) {
+                    const btnGen = document.getElementById('btnGenerar');
+                    btnGen.style.display = 'inline-block';
+                    btnGen.innerHTML = `2. Añadir Firma (0/${cantidadFirmantes})`;
+                    btnGen.style.background = "#2ecc71"; // Restaurar a color verde
                 }
             }
         });
 
-        // --- VALIDACIÓN DE ARCHIVOS ---
         function validarArchivo(file) {
             if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
-                alert("❌ Archivo no válido. Sube ÚNICAMENTE PDF.");
+                alert("❌ Formato no válido. Sube un PDF.");
                 fileInput.value = ""; 
                 fileLabel.textContent = "Toca aquí o arrastra tu PDF";
                 return false;
@@ -122,7 +131,6 @@
             if(fileInput.files.length > 0) validarArchivo(fileInput.files[0]);
         });
 
-        // --- LÓGICA DE PROCESAMIENTO ---
         async function procesarPDF() {
             const file = fileInput.files[0];
             if (!file) return alert("Selecciona un PDF primero.");
@@ -140,6 +148,8 @@
                 const viewportSinEscala = page.getViewport({ scale: 1.0 });
                 pageHeight = viewportSinEscala.height; 
                 
+                // Limpieza por si está reprocesando un documento
+                document.querySelectorAll('.firma-box').forEach(box => box.remove());
                 currentJson.positions = {};
                 htmlDelJefe = "<div>Contenido procesado localmente.</div>"; 
                 
@@ -148,13 +158,19 @@
                 document.getElementById('visor-container').style.display = 'block';
                 document.getElementById('btnGuardar').style.display = 'inline-block'; 
 
-                // 2. MAGIA AUTOMÁTICA: Si PHP ya mandó los datos, dibujamos las cajas
-                if (firmantesReales.length > 0) {
-                    generarCajasAutomaticas();
+                // Habilitamos el botón solo si el Backend ya mandó la cantidad
+                if (cantidadFirmantes > 0) {
+                    firmasGeneradas = 0; // Reiniciamos
+                    const btnGen = document.getElementById('btnGenerar');
+                    btnGen.style.display = 'inline-block';
+                    btnGen.innerHTML = `2. Añadir Firma (0/${cantidadFirmantes})`;
+                    btnGen.style.background = "#2ecc71"; // Verde original
+                } else {
+                    console.warn("ℹ️ Esperando a que el sistema padre envíe la cantidad de firmantes...");
                 }
 
             } catch (err) {
-                alert("❌ Error al procesar el PDF: " + err.message);
+                alert("❌ Error: " + err.message);
                 document.getElementById('drop-area').style.display = 'block';
                 document.getElementById('btnProcesar').style.display = 'inline-block';
             } finally {
@@ -177,34 +193,43 @@
             await page.render({ canvasContext: context, viewport: viewport }).promise;
         }
 
-        // --- 3. FUNCIÓN GENERADORA AUTOMÁTICA ---
-        function generarCajasAutomaticas() {
-            // Limpiamos el mapa actual
-            document.querySelectorAll('.firma-box').forEach(box => box.remove());
-            currentJson.positions = {};
+        // --- FUNCIÓN QUE AGREGA FIRMAS UNA POR UNA ---
+        function agregarSiguienteFirma() {
+            // Verificamos si ya llegamos al límite
+            if (firmasGeneradas >= cantidadFirmantes) {
+                return; // Ya no hace nada si ya se generaron todas
+            }
 
-            firmantesReales.forEach((firmante, index) => {
-                let signerKey = 'signer-' + firmante.id;
-                
-                // Posición inicial en cascada para que no se superpongan
-                let posicionYInicial = Math.round(pageHeight - 100 - (index * 65));
-                if (posicionYInicial < 0) posicionYInicial = 10; // Tope de seguridad
-                
-                currentJson.positions[signerKey] = { x: 50, y: posicionYInicial };
-                
-                const box = document.createElement('div');
-                box.id = 'box-' + signerKey; 
-                box.className = 'firma-box';
-                
-                // Imprimimos el nombre real y el rol que viene desde PHP
-                box.innerHTML = `
-                    <div class="nombre-firma">${firmante.nombre}</div> 
-                    <div class="id-firma">[${firmante.rol}]</div>
-                `;
-                
-                document.getElementById('visor-container').appendChild(box);
-                colocarCaja(box.id, currentJson.positions[signerKey]);
-            });
+            // Aumentamos el contador
+            firmasGeneradas++;
+
+            let signerKey = 'signer-' + firmasGeneradas;
+            
+            // Calculamos la posición en Y (cada firma aparecerá un poco más arriba para no ocultarse si el usuario no la mueve)
+            let posicionYInicial = Math.round(pageHeight - 100 - ((firmasGeneradas - 1) * 65));
+            if (posicionYInicial < 0) posicionYInicial = 10; 
+            
+            currentJson.positions[signerKey] = { x: 50, y: posicionYInicial };
+            
+            const box = document.createElement('div');
+            box.id = 'box-' + signerKey; 
+            box.className = 'firma-box';
+            box.innerHTML = `
+                <div class="nombre-firma">Firmante ${firmasGeneradas}</div> 
+                <div class="id-firma">[${signerKey}]</div>
+            `;
+            
+            document.getElementById('visor-container').appendChild(box);
+            colocarCaja(box.id, currentJson.positions[signerKey]);
+
+            // --- ACTUALIZAR EL ESTADO DEL BOTÓN ---
+            const btnGen = document.getElementById('btnGenerar');
+            if (firmasGeneradas === cantidadFirmantes) {
+                btnGen.innerHTML = "✅ Firmas Generadas";
+                btnGen.style.background = "#95a5a6"; // Gris para indicar que finalizó
+            } else {
+                btnGen.innerHTML = `2. Añadir Firma (${firmasGeneradas}/${cantidadFirmantes})`;
+            }
         }
 
         function colocarCaja(id, pos) {
@@ -268,8 +293,8 @@
                 let xFinal = Math.round(nuevaLeft / currentScale);
                 let yFinal = Math.round(pageHeight - ((nuevaTop + FIRMA_H) / currentScale));
 
-                currentJson.positions[signerKey].x = xFinal < 0 ? 0 : xFinal;
-                currentJson.positions[signerKey].y = yFinal < 0 ? 0 : yFinal;
+                currentJson.positions[signerKey].x = Math.max(0, xFinal);
+                currentJson.positions[signerKey].y = Math.max(0, yFinal);
             }
 
             function closeDragElement() {
@@ -280,7 +305,12 @@
         }
 
         function enviarAE_digital() {
-            if (Object.keys(currentJson.positions).length === 0) return alert("⚠️ No hay firmas generadas para guardar.");
+            // Verificamos que haya sacado todas las firmas necesarias antes de guardar
+            if (firmasGeneradas < cantidadFirmantes) {
+                return alert(`⚠️ Te falta ubicar firmas. Llevas ${firmasGeneradas} de ${cantidadFirmantes}.`);
+            }
+
+            if (Object.keys(currentJson.positions).length === 0) return alert("⚠️ No hay firmas para guardar.");
 
             const paqueteFinal = {
                 tipo: 'GUARDAR_PLANTILLA_COMPLETA',
@@ -292,12 +322,12 @@
             };
 
             window.parent.postMessage(paqueteFinal, '*');
-            console.log("PAQUETE ENVIADO AL PADRE:", paqueteFinal);
+            console.log("PAQUETE ENVIADO:", paqueteFinal);
 
             const btn = document.getElementById('btnGuardar');
-            btn.innerHTML = "✅ ¡Guardado!";
+            btn.innerHTML = "✅ Configuración Enviada";
             btn.style.background = "#27ae60"; 
-            setTimeout(() => { btn.innerHTML = "💾 Guardar Configuración"; btn.style.background = ""; }, 2500);
+            setTimeout(() => { btn.innerHTML = "3. 💾 Guardar Configuración"; btn.style.background = ""; }, 2500);
         }
     </script>
 </body>
