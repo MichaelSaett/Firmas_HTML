@@ -294,6 +294,7 @@
                         let textoOriginal = item.str.trim();
                         let textoMinuscula = textoOriginal.toLowerCase();
 
+                        // Ignoramos textos automáticos de pies de página
                         if (textoMinuscula.includes("documento con firma") || textoMinuscula.includes("electrónica")) {
                             return; 
                         }
@@ -302,6 +303,7 @@
                             let coordX = item.transform[4];
                             let coordY = item.transform[5];
 
+                            // Buscamos palabras en líneas cortas
                             if (textoOriginal.length < 45) {
                                 palabrasClave.forEach(clave => {
                                     if (textoMinuscula.includes(clave)) {
@@ -313,8 +315,10 @@
                         }
                     });
 
+                    // Ordenamos de abajo hacia arriba
                     hallazgos.sort((a, b) => a.y - b.y);
 
+                    // Filtramos para que haya 1 anclaje por zona
                     let anclajesFiltrados = [];
                     hallazgos.forEach(h => {
                         let esMismaZona = anclajesFiltrados.find(a => Math.abs(a.x - h.x) < 150 && Math.abs(a.y - h.y) < 60);
@@ -323,7 +327,20 @@
                         }
                     });
 
+                    // Ordenamos de izquierda a derecha
                     anclajesFiltrados.sort((a, b) => a.x - b.x);
+
+                    // --- NUEVA REGLA: ALINEACIÓN HORIZONTAL ESTRICTA ---
+                    // Recorremos los anclajes finales. Si dos anclajes pertenecen a la misma "fila" 
+                    // (diferencia de altura menor a 80px), forzamos al segundo a usar la altura exacta del primero.
+                    for (let i = 0; i < anclajesFiltrados.length; i++) {
+                        for (let j = i + 1; j < anclajesFiltrados.length; j++) {
+                            if (Math.abs(anclajesFiltrados[i].y - anclajesFiltrados[j].y) < 80) {
+                                anclajesFiltrados[j].y = anclajesFiltrados[i].y; // Nivelamos la balanza
+                            }
+                        }
+                    }
+
                     anclajesEncontrados = anclajesFiltrados;
                     lowestTextY = minY - 70; 
                 } else {
