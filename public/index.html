@@ -3,58 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (V3.9 - Estado Persistente)</title>
+    <title>Ubicación de Firmas E-digital (V4.0 - Diseño Corporativo)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; color: #333; display: flex; flex-direction: column; align-items: center; padding: 20px 10px; margin: 0; overflow-x: hidden; }
-        .panel { background: #ffffff; padding: 30px 20px; border-radius: 12px; width: 100%; max-width: 800px; box-sizing: border-box; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; border: 1px solid #e0e0e0; }
-        h2 { margin-top: 0; color: #2c3e50; font-size: 24px; }
-        p { color: #7f8c8d; font-size: 15px; margin-bottom: 20px; }
-        .upload-area { border: 2px dashed #bdc3c7; border-radius: 8px; padding: 30px 10px; cursor: pointer; background: #fafafa; margin-bottom: 20px; display: block; transition: 0.3s; word-wrap: break-word; }
-        .upload-area:hover, .upload-area.dragover { border-color: #3498db; background: #ebf5fb; }
+        /* --- PALETA CORPORATIVA --- */
+        :root {
+            --color-primario: #00C853; /* Verde vibrante */
+            --color-secundario: #157347; /* Verde oscuro */
+            --color-blanco: #FFFFFF;
+            --color-gris: #CCCCCC;
+            --color-texto: #333333;
+            --color-fondo: #f4f7f6;
+            --color-peligro: #e74c3c; /* Mantenido por UX universal */
+        }
+
+        body { font-family: 'Inter', sans-serif; background-color: var(--color-fondo); color: var(--color-texto); display: flex; flex-direction: column; align-items: center; padding: 20px 10px; margin: 0; overflow-x: hidden; }
+        
+        .panel { background: var(--color-blanco); padding: 30px 20px; border-radius: 12px; width: 100%; max-width: 800px; box-sizing: border-box; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; border: 1px solid var(--color-gris); }
+        
+        h2 { margin-top: 0; color: var(--color-secundario); font-size: 24px; }
+        p { color: #666; font-size: 15px; margin-bottom: 20px; }
+        
+        /* Área de carga */
+        .upload-area { border: 2px dashed var(--color-gris); border-radius: 8px; padding: 30px 10px; cursor: pointer; background: #fafafa; margin-bottom: 20px; display: block; transition: 0.3s; word-wrap: break-word; }
+        .upload-area:hover, .upload-area.dragover { border-color: var(--color-primario); background: rgba(0, 200, 83, 0.05); }
         #pdfFile { display: none; }
         
-        button { background: #3498db; color: #fff; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; margin: 5px; }
-        button:hover { background: #2980b9; transform: scale(1.02); }
-        button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; }
+        /* Botones Base */
+        button { background: var(--color-secundario); color: var(--color-blanco); border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; margin: 5px; }
+        button:hover { background: var(--color-primario); transform: scale(1.02); }
+        button:disabled { background: var(--color-gris); color: #888; cursor: not-allowed; transform: none; }
         
-        .btn-add-auto { background: #2ecc71; display: none; }
-        .btn-add-auto:hover { background: #27ae60; }
-        .btn-save { background: #e67e22; display: none; }
-        .btn-save:hover { background: #d35400; }
+        /* Botones Específicos */
+        .btn-add-auto { background: var(--color-primario); display: none; }
+        .btn-add-auto:hover { background: var(--color-secundario); }
+        .btn-save { background: var(--color-secundario); display: none; }
+        .btn-save:hover { background: var(--color-primario); }
         
-        .btn-reset { background: #e74c3c; display: none; }
+        /* Botón de Eliminar Firmas (Mantenemos Rojo por UX) */
+        .btn-reset { background: var(--color-peligro); display: none; }
         .btn-reset:hover { background: #c0392b; }
         
         .botones-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
         
-        #paginacion-container { display: none; align-items: center; justify-content: center; gap: 15px; margin-top: 15px; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
-        .btn-pagina { padding: 8px 15px; background: #34495e; font-size: 14px; width: auto; }
-        .btn-pagina:hover { background: #2c3e50; }
-        .texto-pagina { font-weight: bold; color: #2c3e50; font-size: 16px; display: flex; align-items: center; gap: 5px; }
+        /* Paginación */
+        #paginacion-container { display: none; align-items: center; justify-content: center; gap: 15px; margin-top: 15px; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid var(--color-gris); }
+        .btn-pagina { padding: 8px 15px; background: var(--color-secundario); font-size: 14px; width: auto; }
+        .btn-pagina:hover { background: var(--color-primario); }
+        .texto-pagina { font-weight: bold; color: var(--color-secundario); font-size: 16px; display: flex; align-items: center; gap: 5px; }
         
-        #input-pagina { width: 50px; text-align: center; font-size: 16px; font-weight: bold; color: #2c3e50; border: 2px solid #bdc3c7; border-radius: 6px; padding: 4px; outline: none; transition: 0.2s; }
-        #input-pagina:focus { border-color: #3498db; background: #ebf5fb; }
+        #input-pagina { width: 50px; text-align: center; font-size: 16px; font-weight: bold; color: var(--color-secundario); border: 2px solid var(--color-gris); border-radius: 6px; padding: 4px; outline: none; transition: 0.2s; }
+        #input-pagina:focus { border-color: var(--color-primario); background: rgba(0, 200, 83, 0.05); }
         #input-pagina::-webkit-outer-spin-button, #input-pagina::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         #input-pagina[type=number] { -moz-appearance: textfield; }
 
-        #visor-container { display: none; margin-top: 20px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: white; max-width: 100%; overflow: hidden; }
+        /* Visor PDF */
+        #visor-container { display: none; margin-top: 20px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: var(--color-blanco); max-width: 100%; overflow: hidden; }
         canvas { display: block; max-width: 100%; height: auto; }
         
-        .firma-box { position: absolute; background: rgba(46, 204, 113, 0.2); border: 2px solid #2ecc71; color: #27ae60; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; touch-action: none; text-align: center; line-height: 1.1; padding: 2px 4px; box-sizing: border-box; overflow: visible; }
-        .firma-box:active { cursor: grabbing; background: rgba(46, 204, 113, 0.4); }
+        /* Cajitas de Firma */
+        .firma-box { position: absolute; background: rgba(0, 200, 83, 0.15); border: 2px solid var(--color-primario); color: var(--color-secundario); font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; touch-action: none; text-align: center; line-height: 1.1; padding: 2px 4px; box-sizing: border-box; overflow: visible; }
+        .firma-box:active { cursor: grabbing; background: rgba(0, 200, 83, 0.3); }
         
-        .btn-cerrar-firma { position: absolute; top: -8px; right: -8px; background: #e74c3c; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; z-index: 20; box-shadow: 0 2px 5px rgba(0,0,0,0.3); transition: 0.2s; }
+        .btn-cerrar-firma { position: absolute; top: -8px; right: -8px; background: var(--color-peligro); color: var(--color-blanco); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; z-index: 20; box-shadow: 0 2px 5px rgba(0,0,0,0.3); transition: 0.2s; }
         .btn-cerrar-firma:hover { background: #c0392b; transform: scale(1.15); }
         
         .nombre-firma { width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
-        .id-firma { color: #2196f3; font-weight: bold; pointer-events: none; margin-top: 1px; }
+        .id-firma { color: var(--color-secundario); font-weight: bold; pointer-events: none; margin-top: 1px; opacity: 0.8; }
 
-        .guia-magnetica { position: absolute; background-color: #e74c3c; display: none; pointer-events: none; z-index: 5; opacity: 0.8; }
+        /* Guías Magnéticas */
+        .guia-magnetica { position: absolute; background-color: var(--color-primario); display: none; pointer-events: none; z-index: 5; opacity: 0.8; }
         #guia-v { width: 1.5px; height: 100%; top: 0; }
         #guia-h { height: 1.5px; width: 100%; left: 0; }
+
+        /* --- Animaciones del Loader Corporativo --- */
+        .loader-container { text-align: center; margin-top: 20px; }
+        
+        .spinner {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            border: 3px solid rgba(0, 200, 83, 0.2);
+            border-top: 3px solid var(--color-primario);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+        
+        .loader-text {
+            display: inline-block;
+            color: var(--color-secundario);
+            font-weight: bold;
+            font-size: 15px;
+            vertical-align: middle;
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
 
         @media (max-width: 600px) {
             h2 { font-size: 20px; }
@@ -72,7 +121,7 @@
         
         <label for="pdfFile" class="upload-area" id="drop-area">
             <span style="font-size: 30px;">📄</span><br><br>
-            <span id="file-label" style="font-weight: bold; color: #2c3e50; transition: 0.3s;">Toca aquí o arrastra tu PDF</span>
+            <span id="file-label" style="font-weight: bold; color: var(--color-secundario); transition: 0.3s;">Toca aquí o arrastra tu PDF</span>
         </label>
         <input type="file" id="pdfFile" accept="application/pdf">
         
@@ -93,7 +142,10 @@
             <button class="btn-pagina" id="btnSiguiente" onclick="cambiarPagina(1)">Siguiente ▶</button>
         </div>
 
-        <div id="loader" style="display:none; color: #3498db; margin-top: 15px; font-weight: bold;">Cargando documento... ⏳</div>
+        <div id="loader" class="loader-container" style="display:none;">
+            <div class="spinner"></div>
+            <span class="loader-text">Procesando y escaneando documento...</span>
+        </div>
     </div>
 
     <div id="visor-container">
@@ -129,7 +181,12 @@
         const fileLabel = document.getElementById('file-label');
         const dropArea = document.getElementById('drop-area');
 
-        // Escucha del mensaje externo
+        // Variables de colores de JS enlazadas a tu paleta
+        const COLOR_PRIMARIO = "#00C853";
+        const COLOR_GRIS = "#CCCCCC";
+        const COLOR_ERROR = "#e74c3c";
+        const COLOR_TEXTO = "#157347";
+
         window.addEventListener('message', function(event) {
             if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
                 let cantidadRecibida = parseInt(event.data.cantidad) || 0;
@@ -155,20 +212,20 @@
                 alert("❌ Archivo inválido. Por favor, arrastra ÚNICAMENTE un documento en formato PDF.");
                 fileInput.value = ""; 
                 fileLabel.textContent = "⚠️ Error: Solo se aceptan archivos PDF";
-                fileLabel.style.color = "#e74c3c"; 
-                dropArea.style.borderColor = "#e74c3c"; 
+                fileLabel.style.color = COLOR_ERROR; 
+                dropArea.style.borderColor = COLOR_ERROR; 
                 setTimeout(() => {
                     fileLabel.textContent = "Toca aquí o arrastra tu PDF";
-                    fileLabel.style.color = "#2c3e50";
-                    dropArea.style.borderColor = "#bdc3c7";
+                    fileLabel.style.color = COLOR_TEXTO;
+                    dropArea.style.borderColor = COLOR_GRIS;
                 }, 3500);
                 return false;
             }
             let name = file.name;
             if(name.length > 25) name = name.substring(0, 22) + '...';
             fileLabel.textContent = "✅ " + name;
-            fileLabel.style.color = "#27ae60";
-            dropArea.style.borderColor = "#2ecc71";
+            fileLabel.style.color = COLOR_PRIMARIO;
+            dropArea.style.borderColor = COLOR_PRIMARIO;
             return true;
         }
 
@@ -396,10 +453,12 @@
             
             if (generadas >= cantidadFirmantes && cantidadFirmantes > 0) {
                 btnGen.innerHTML = "✅ Firmas Generadas";
-                btnGen.style.background = "#95a5a6"; 
+                btnGen.style.background = COLOR_GRIS; 
+                btnGen.style.color = "#888"; // Texto más oscuro para contraste
             } else {
                 btnGen.innerHTML = `2. Añadir Firma (${generadas}/${cantidadFirmantes})`;
-                btnGen.style.background = "#2ecc71";
+                btnGen.style.background = COLOR_PRIMARIO;
+                btnGen.style.color = "#FFFFFF";
             }
 
             if (generadas > 0) {
@@ -651,7 +710,7 @@
 
             const btn = document.getElementById('btnGuardar');
             btn.innerHTML = "✅ Configuración Enviada";
-            btn.style.background = "#27ae60"; 
+            btn.style.background = COLOR_PRIMARIO; 
             setTimeout(() => { btn.innerHTML = "3. Guardar Configuración"; btn.style.background = ""; }, 2500);
         }
 
@@ -664,7 +723,7 @@
             const nombreUnico = 'borrador_firmas_' + file.name;
             const estadoA_Guardar = {
                 posiciones: currentJson.positions,
-                totalRequerido: cantidadFirmantes // 👈 ¡La clave! Guardamos cuántas pedían
+                totalRequerido: cantidadFirmantes
             };
             localStorage.setItem(nombreUnico, JSON.stringify(estadoA_Guardar));
         }
@@ -680,7 +739,6 @@
                 try {
                     const datosBorrador = JSON.parse(borrador);
 
-                    // Compatibilidad por si el usuario tiene un borrador guardado con el código anterior
                     let posicionesGuardadas = datosBorrador.posiciones ? datosBorrador.posiciones : datosBorrador;
                     let cantidadRequeridaGuardada = datosBorrador.totalRequerido ? datosBorrador.totalRequerido : Object.keys(posicionesGuardadas).length;
 
@@ -689,7 +747,6 @@
                     if (cantidadBorrador > 0) {
                         currentJson.positions = posicionesGuardadas;
 
-                        // Si la pestaña se refrescó, el padre no nos dijo cuántas firmas son, lo rescatamos del disco duro.
                         if (cantidadFirmantes === 0 && cantidadRequeridaGuardada > 0) {
                             cantidadFirmantes = cantidadRequeridaGuardada;
                         }
