@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (V3.7 - UX Corporativo)</title>
+    <title>Ubicación de Firmas E-digital (V3.9 - Estado Persistente)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -25,7 +25,6 @@
         .btn-save { background: #e67e22; display: none; }
         .btn-save:hover { background: #d35400; }
         
-        /* Botón de Eliminar Firmas */
         .btn-reset { background: #e74c3c; display: none; }
         .btn-reset:hover { background: #c0392b; }
         
@@ -217,6 +216,8 @@
                 document.getElementById('paginacion-container').style.display = 'flex';
                 document.getElementById('btnGuardar').style.display = 'inline-block'; 
                 
+                restaurarBorradorLocal(); 
+                
                 actualizarBotonesPaginacion();
 
                 if (cantidadFirmantes > 0) {
@@ -294,7 +295,6 @@
                         let textoOriginal = item.str.trim();
                         let textoMinuscula = textoOriginal.toLowerCase();
 
-                        // Ignoramos textos automáticos de pies de página
                         if (textoMinuscula.includes("documento con firma") || textoMinuscula.includes("electrónica")) {
                             return; 
                         }
@@ -303,7 +303,6 @@
                             let coordX = item.transform[4];
                             let coordY = item.transform[5];
 
-                            // Buscamos palabras en líneas cortas
                             if (textoOriginal.length < 45) {
                                 palabrasClave.forEach(clave => {
                                     if (textoMinuscula.includes(clave)) {
@@ -315,10 +314,8 @@
                         }
                     });
 
-                    // Ordenamos de abajo hacia arriba
                     hallazgos.sort((a, b) => a.y - b.y);
 
-                    // Filtramos para que haya 1 anclaje por zona
                     let anclajesFiltrados = [];
                     hallazgos.forEach(h => {
                         let esMismaZona = anclajesFiltrados.find(a => Math.abs(a.x - h.x) < 150 && Math.abs(a.y - h.y) < 60);
@@ -327,16 +324,12 @@
                         }
                     });
 
-                    // Ordenamos de izquierda a derecha
                     anclajesFiltrados.sort((a, b) => a.x - b.x);
 
-                    // --- NUEVA REGLA: ALINEACIÓN HORIZONTAL ESTRICTA ---
-                    // Recorremos los anclajes finales. Si dos anclajes pertenecen a la misma "fila" 
-                    // (diferencia de altura menor a 80px), forzamos al segundo a usar la altura exacta del primero.
                     for (let i = 0; i < anclajesFiltrados.length; i++) {
                         for (let j = i + 1; j < anclajesFiltrados.length; j++) {
                             if (Math.abs(anclajesFiltrados[i].y - anclajesFiltrados[j].y) < 80) {
-                                anclajesFiltrados[j].y = anclajesFiltrados[i].y; // Nivelamos la balanza
+                                anclajesFiltrados[j].y = anclajesFiltrados[i].y; 
                             }
                         }
                     }
@@ -397,11 +390,11 @@
         function actualizarBotonGenerar() {
             let generadas = Object.keys(currentJson.positions).length;
             const btnGen = document.getElementById('btnGenerar');
-            const btnReset = document.getElementById('btnReset'); // Capturamos el botón
+            const btnReset = document.getElementById('btnReset'); 
             
             btnGen.style.display = 'inline-block';
             
-            if (generadas >= cantidadFirmantes) {
+            if (generadas >= cantidadFirmantes && cantidadFirmantes > 0) {
                 btnGen.innerHTML = "✅ Firmas Generadas";
                 btnGen.style.background = "#95a5a6"; 
             } else {
@@ -409,7 +402,6 @@
                 btnGen.style.background = "#2ecc71";
             }
 
-            // MAGIA UX: Mostramos el botón de borrar SOLO si hay firmas colocadas
             if (generadas > 0) {
                 btnReset.style.display = 'inline-block';
             } else {
@@ -427,7 +419,8 @@
             if (confirm(`¿Estás seguro de que deseas eliminar las ${generadas} firma(s) que ya ubicaste?`)) {
                 document.querySelectorAll('.firma-box').forEach(box => box.remove());
                 currentJson.positions = {};
-                actualizarBotonGenerar(); // Al llamar esto, como generadas baja a 0, el botón se auto-oculta
+                actualizarBotonGenerar(); 
+                autoGuardarLocal(); 
             }
         }
 
@@ -445,7 +438,6 @@
                 let ancla = anclajesEncontrados[numeroFirma - 1];
                 posX = ancla.x - 30; 
                 posY = ancla.y + 40; 
-                console.log(`¡Smart Anchor Activado! Firma ${numeroFirma} anclada a la palabra: "${ancla.palabra}"`);
             } else {
                 if (total === 1) {
                     posX = (pageWidth - FIRMA_W) / 2; 
@@ -477,6 +469,7 @@
             document.getElementById('visor-container').appendChild(box);
             colocarCaja(box.id, currentJson.positions[signerKey]);
             actualizarBotonGenerar();
+            autoGuardarLocal(); 
         }
 
         window.eliminarFirma = function(event, signerKey) {
@@ -484,7 +477,8 @@
             let box = document.getElementById('box-' + signerKey);
             if(box) box.remove();
             delete currentJson.positions[signerKey];
-            actualizarBotonGenerar(); // Si borras la última firma en la "x", también se ocultará el botón rojo
+            actualizarBotonGenerar(); 
+            autoGuardarLocal(); 
         };
 
         function colocarCaja(id, pos) {
@@ -606,23 +600,21 @@
                 elmnt.style.zIndex = 1;
                 guiaV.style.display = "none";
                 guiaH.style.display = "none";
+                autoGuardarLocal(); 
             }
         }
 
         function enviarAE_digital() {
             let generadas = Object.keys(currentJson.positions).length;
 
-            // --- CANDADO 1: ¿El sistema externo ya nos dijo cuántas firmas necesitamos? ---
             if (cantidadFirmantes === 0) {
                 return alert("Acción no permitida: El sistema aún no ha definido la cantidad de firmas requeridas para este documento.");
             }
 
-            // --- CANDADO 2: Evitar enviar JSON vacío ---
             if (generadas === 0) {
                 return alert("Error: No has ubicado ninguna firma en el documento.");
             }
 
-            // --- CANDADO 3: Evitar envíos incompletos ---
             if (generadas < cantidadFirmantes) {
                 return alert(`Falta ubicar firmas. Llevas ${generadas} de ${cantidadFirmantes}.`);
             }
@@ -652,10 +644,80 @@
             window.parent.postMessage(paqueteFinal, '*');
             console.log("PAQUETE ENVIADO (JSON UNIVERSAL):", paqueteFinal);
 
+            const file = document.getElementById('pdfFile').files[0];
+            if (file) {
+                localStorage.removeItem('borrador_firmas_' + file.name);
+            }
+
             const btn = document.getElementById('btnGuardar');
             btn.innerHTML = "✅ Configuración Enviada";
             btn.style.background = "#27ae60"; 
             setTimeout(() => { btn.innerHTML = "3. Guardar Configuración"; btn.style.background = ""; }, 2500);
+        }
+
+        // --- SISTEMA DE ESTADO PERSISTENTE MEJORADO ---
+
+        function autoGuardarLocal() {
+            const file = document.getElementById('pdfFile').files[0];
+            if (!file) return;
+            
+            const nombreUnico = 'borrador_firmas_' + file.name;
+            const estadoA_Guardar = {
+                posiciones: currentJson.positions,
+                totalRequerido: cantidadFirmantes // 👈 ¡La clave! Guardamos cuántas pedían
+            };
+            localStorage.setItem(nombreUnico, JSON.stringify(estadoA_Guardar));
+        }
+
+        function restaurarBorradorLocal() {
+            const file = document.getElementById('pdfFile').files[0];
+            if (!file) return;
+
+            const nombreUnico = 'borrador_firmas_' + file.name;
+            const borrador = localStorage.getItem(nombreUnico);
+            
+            if (borrador) {
+                try {
+                    const datosBorrador = JSON.parse(borrador);
+
+                    // Compatibilidad por si el usuario tiene un borrador guardado con el código anterior
+                    let posicionesGuardadas = datosBorrador.posiciones ? datosBorrador.posiciones : datosBorrador;
+                    let cantidadRequeridaGuardada = datosBorrador.totalRequerido ? datosBorrador.totalRequerido : Object.keys(posicionesGuardadas).length;
+
+                    let cantidadBorrador = Object.keys(posicionesGuardadas).length;
+                    
+                    if (cantidadBorrador > 0) {
+                        currentJson.positions = posicionesGuardadas;
+
+                        // Si la pestaña se refrescó, el padre no nos dijo cuántas firmas son, lo rescatamos del disco duro.
+                        if (cantidadFirmantes === 0 && cantidadRequeridaGuardada > 0) {
+                            cantidadFirmantes = cantidadRequeridaGuardada;
+                        }
+                        
+                        for (let signerKey in currentJson.positions) {
+                            let pos = currentJson.positions[signerKey];
+                            let numeroFirma = signerKey.split('-')[1];
+                            
+                            const box = document.createElement('div');
+                            box.id = 'box-' + signerKey; 
+                            box.className = 'firma-box';
+                            box.style.display = (pos.pagina === paginaActualNum) ? 'flex' : 'none';
+                            
+                            box.innerHTML = `
+                                <div class="btn-cerrar-firma" onclick="eliminarFirma(event, '${signerKey}')">×</div>
+                                <div class="nombre-firma" style="font-size: 11px;">Firmante ${numeroFirma}</div> 
+                                <div class="id-firma" style="font-size: 9px;">[${signerKey}]</div>
+                            `;
+                            
+                            document.getElementById('visor-container').appendChild(box);
+                            colocarCaja(box.id, pos);
+                        }
+                        actualizarBotonGenerar();
+                    }
+                } catch(e) {
+                    console.error("Error al restaurar borrador:", e);
+                }
+            }
         }
     </script>
 </body>
