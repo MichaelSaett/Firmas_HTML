@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (V2.0 - Auto-Posición y Y Invertida)</title>
+    <title>Ubicación de Firmas E-digital (V3.0 - Smart Anchor)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -105,7 +105,6 @@
         let paginaActualNum = 1;
         let totalPaginasGlobal = 1;
         
-        // Variables globales de dimensión de página
         let pageHeight = 0;
         let pageWidth = 0; 
         
@@ -113,8 +112,10 @@
         const FIRMA_H = 56; 
         const UMBRAL_MAGNETICO = 12; 
 
-        // Variable para el auto-posicionamiento
-        let lowestTextY = 100; // Guardará dónde termina el texto de la página
+        let lowestTextY = 100; 
+        
+        // --- NUEVA VARIABLE PARA GUARDAR LAS PALABRAS ENCONTRADAS ---
+        let anclajesEncontrados = []; 
 
         let currentJson = { positions: {} };
         let htmlDelJefe = ""; 
@@ -135,12 +136,7 @@
                     return; 
                 }
 
-                if (cantidadRecibida > 15) {
-                    alert("⚠️ Se limitó a 15 firmas máximas permitidas.");
-                    cantidadFirmantes = 15;
-                } else {
-                    cantidadFirmantes = cantidadRecibida;
-                }
+                cantidadFirmantes = cantidadRecibida > 15 ? 15 : cantidadRecibida;
                 
                 if (pdfGlobal !== null && cantidadFirmantes > 0) {
                     actualizarBotonGenerar();
@@ -151,21 +147,17 @@
         function validarArchivo(file) {
             if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
                 alert("❌ Archivo inválido. Por favor, arrastra ÚNICAMENTE un documento en formato PDF.");
-                
                 fileInput.value = ""; 
                 fileLabel.textContent = "⚠️ Error: Solo se aceptan archivos PDF";
                 fileLabel.style.color = "#e74c3c"; 
                 dropArea.style.borderColor = "#e74c3c"; 
-                
                 setTimeout(() => {
                     fileLabel.textContent = "Toca aquí o arrastra tu PDF";
                     fileLabel.style.color = "#2c3e50";
                     dropArea.style.borderColor = "#bdc3c7";
                 }, 3500);
-                
                 return false;
             }
-
             let name = file.name;
             if(name.length > 25) name = name.substring(0, 22) + '...';
             fileLabel.textContent = "✅ " + name;
@@ -174,15 +166,8 @@
             return true;
         }
 
-        dropArea.addEventListener('dragover', (e) => { 
-            e.preventDefault(); 
-            dropArea.classList.add('dragover'); 
-        });
-        
-        dropArea.addEventListener('dragleave', () => {
-            dropArea.classList.remove('dragover'); 
-        });
-        
+        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
+        dropArea.addEventListener('dragleave', () => { dropArea.classList.remove('dragover'); });
         dropArea.addEventListener('drop', (e) => { 
             e.preventDefault(); 
             dropArea.classList.remove('dragover'); 
@@ -196,9 +181,7 @@
             } 
         });
 
-        fileInput.addEventListener('change', () => { 
-            if(fileInput.files.length > 0) validarArchivo(fileInput.files[0]); 
-        });
+        fileInput.addEventListener('change', () => { if(fileInput.files.length > 0) validarArchivo(fileInput.files[0]); });
 
         async function procesarPDF() {
             const file = fileInput.files[0];
@@ -231,7 +214,6 @@
                 if (cantidadFirmantes > 0) {
                     actualizarBotonGenerar();
                 }
-
             } catch (err) {
                 alert("❌ Error: " + err.message);
                 document.getElementById('drop-area').style.display = 'block';
@@ -254,12 +236,8 @@
         async function irAPaginaEspecifica() {
             let input = document.getElementById('input-pagina');
             let nuevaPagina = parseInt(input.value);
-            
-            if (isNaN(nuevaPagina) || nuevaPagina < 1) {
-                nuevaPagina = 1;
-            } else if (nuevaPagina > totalPaginasGlobal) {
-                nuevaPagina = totalPaginasGlobal;
-            }
+            if (isNaN(nuevaPagina) || nuevaPagina < 1) nuevaPagina = 1;
+            else if (nuevaPagina > totalPaginasGlobal) nuevaPagina = totalPaginasGlobal;
             
             if (nuevaPagina !== paginaActualNum) {
                 paginaActualNum = nuevaPagina;
@@ -269,7 +247,6 @@
             } else {
                 input.value = paginaActualNum;
             }
-            
             input.blur(); 
         }
 
@@ -279,32 +256,73 @@
             document.getElementById('btnSiguiente').disabled = (paginaActualNum >= totalPaginasGlobal);
         }
 
-        async function renderizarPaginaActual() {
+async function renderizarPaginaActual() {
             const page = await pdfGlobal.getPage(paginaActualNum);
             const viewportSinEscala = page.getViewport({ scale: 1.0 });
             
             pageWidth = viewportSinEscala.width; 
             pageHeight = viewportSinEscala.height; 
 
-            // MAGIA DE METADATA: Extraemos la rotación para el backend
             if (!currentJson.metadata) currentJson.metadata = {};
             currentJson.metadata[paginaActualNum] = {
                 rotacion: page.rotate
             };
 
-            // --- RADAR DE TEXTO: Buscamos dónde termina el párrafo ---
+            // --- RADAR DE TEXTO: Detección de Zonas de Firma ---
+            anclajesEncontrados = []; 
+            const palabrasClave = ["RUT", "firma", "Empleador", "Trabajador", "c.i", "c.i."];
+            let hallazgos = []; 
+
             try {
                 const textContent = await page.getTextContent();
-                let minY = pageHeight; // Empezamos desde el techo
+                let minY = pageHeight; 
                 
                 if (textContent.items.length > 0) {
                     textContent.items.forEach(item => {
-                        if (item.str.trim().length > 0) {
-                            let itemY = item.transform[5];
-                            if (itemY < minY) minY = itemY; 
+                        let textoOriginal = item.str.trim();
+                        let textoMinuscula = textoOriginal.toLowerCase();
+
+                        // 1. REGLA ANTI-BASURA: Ignoramos el pie de página automático
+                        if (textoMinuscula.includes("documento con firma") || textoMinuscula.includes("electrónica")) {
+                            return; // Ignoramos y pasamos a la siguiente palabra
+                        }
+
+                        if (textoMinuscula.length > 0) {
+                            let coordX = item.transform[4];
+                            let coordY = item.transform[5];
+
+                            // Solo leemos líneas cortas
+                            if (textoOriginal.length < 45) {
+                                palabrasClave.forEach(clave => {
+                                    if (textoMinuscula.includes(clave)) {
+                                        hallazgos.push({ x: coordX, y: coordY, palabra: textoOriginal });
+                                    }
+                                });
+                            }
+
+                            if (coordY < minY) minY = coordY; 
                         }
                     });
-                    // Colocamos la firma 70 píxeles por debajo de la última palabra
+
+                    // Ordenamos de abajo hacia arriba (gravedad)
+                    hallazgos.sort((a, b) => a.y - b.y);
+
+                    // 2. FILTRO DE ZONA: Solo un anclaje por bloque
+                    let anclajesFiltrados = [];
+                    hallazgos.forEach(h => {
+                        // Buscamos si ya guardamos un anclaje que esté cerca horizontal y verticalmente
+                        // (150px de ancho y 60px de alto equivale al "área" visual de una firma)
+                        let esMismaZona = anclajesFiltrados.find(a => Math.abs(a.x - h.x) < 150 && Math.abs(a.y - h.y) < 60);
+                        
+                        if (!esMismaZona) {
+                            anclajesFiltrados.push(h); // Si es un área nueva, la guardamos
+                        }
+                    });
+
+                    // 3. ORDEN LÓGICO: Ordenamos de Izquierda a Derecha
+                    anclajesFiltrados.sort((a, b) => a.x - b.x);
+
+                    anclajesEncontrados = anclajesFiltrados;
                     lowestTextY = minY - 70; 
                 } else {
                     lowestTextY = 100; 
@@ -313,9 +331,7 @@
                 lowestTextY = 100; 
             }
             
-            // Si el texto llega muy al borde de la hoja, no dejamos que la firma se caiga
             if (lowestTextY < 20) lowestTextY = 20;
-            // --------------------------------------------------------
 
             const anchoDisponible = Math.min(window.innerWidth - 30, 800); 
             currentScale = anchoDisponible / viewportSinEscala.width;
@@ -354,9 +370,7 @@
 
         function obtenerSiguienteNumeroDisponible() {
             for (let i = 1; i <= cantidadFirmantes; i++) {
-                if (!currentJson.positions['signer-' + i]) {
-                    return i;
-                }
+                if (!currentJson.positions['signer-' + i]) return i;
             }
             return null;
         }
@@ -364,7 +378,6 @@
         function actualizarBotonGenerar() {
             let generadas = Object.keys(currentJson.positions).length;
             const btnGen = document.getElementById('btnGenerar');
-            
             btnGen.style.display = 'inline-block';
             
             if (generadas >= cantidadFirmantes) {
@@ -382,25 +395,31 @@
 
             let signerKey = 'signer-' + numeroFirma;
             
-            // --- MATEMÁTICA DE DISTRIBUCIÓN HORIZONTAL AUTOMÁTICA ---
             let posX = 50; 
-            let total = cantidadFirmantes; // Total de firmas que se pidieron
+            let posY = lowestTextY; 
+            let total = cantidadFirmantes; 
             
-            if (total === 1) {
-                // Si es 1 sola firma, va exactamente al centro de la hoja
-                posX = (pageWidth - 160) / 2; 
+            // --- DECISIÓN INTELIGENTE DE POSICIÓN ---
+            // Revisamos si encontramos anclajes (palabras clave) para esta firma
+            // Usamos (numeroFirma - 1) para asignar el primer anclaje a la firma 1, el segundo a la 2, etc.
+            if (anclajesEncontrados.length > 0 && anclajesEncontrados[numeroFirma - 1]) {
+                let ancla = anclajesEncontrados[numeroFirma - 1];
+                posX = ancla.x - 20; // Ajustamos un poco a la izquierda para centrar visualmente
+                posY = ancla.y + 15; // Colocamos la firma "encima" de la palabra (como Y es desde abajo, sumamos)
+                console.log(`¡Smart Anchor Activado! Firma ${numeroFirma} anclada a la palabra: "${ancla.palabra}"`);
             } else {
-                // Si son 2 o más, dividimos la hoja en columnas y las repartimos
-                let seccion = pageWidth / (total + 1);
-                posX = (seccion * numeroFirma) - (160 / 2); // 160 es el ancho de nuestra caja verde
+                // Plan B: Distribución matemática equitativa al final del documento
+                if (total === 1) {
+                    posX = (pageWidth - 160) / 2; 
+                } else {
+                    let seccion = pageWidth / (total + 1);
+                    posX = (seccion * numeroFirma) - (160 / 2); 
+                }
             }
 
-            // Margen de seguridad para que no se salgan de los bordes
+            // Muro de seguridad para que la caja nunca salga volando por los lados
             if (posX < 10) posX = 10;
             if (posX > pageWidth - 170) posX = pageWidth - 170;
-
-            // --- AUTO-POSICIÓN VERTICAL DEBAJO DEL TEXTO ---
-            let posY = lowestTextY; 
             
             currentJson.positions[signerKey] = { 
                 x: Math.round(posX), 
@@ -425,10 +444,8 @@
 
         window.eliminarFirma = function(event, signerKey) {
             event.stopPropagation(); 
-            
             let box = document.getElementById('box-' + signerKey);
             if(box) box.remove();
-            
             delete currentJson.positions[signerKey];
             actualizarBotonGenerar();
         };
@@ -548,7 +565,6 @@
                 return alert(`⚠️ Te falta ubicar firmas. Llevas ${generadas} de ${cantidadFirmantes}.`);
             }
 
-            // Creamos un objeto enriquecido con AMBAS coordenadas
             let coordenadasCompletas = {};
             
             for (let key in currentJson.positions) {
@@ -556,8 +572,8 @@
                 
                 coordenadasCompletas[key] = {
                     x: original.x, 
-                    y: original.y, // La original (desde abajo, estándar PDF)
-                    y_invertida: Math.round(pageHeight - original.y), // La invertida (desde arriba)
+                    y: original.y, 
+                    y_invertida: Math.round(pageHeight - original.y), 
                     pagina: original.pagina
                 };
             }
