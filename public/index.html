@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (V4.9 - Envío Fix)</title>
+    <title>Ubicación de Firmas E-digital (V4.10 - Paginación Estricta)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -27,6 +27,9 @@
         button:hover { background: var(--color-primario); transform: scale(1.02); }
         button:disabled { background: var(--color-gris); color: #888; cursor: not-allowed; opacity: 0.6; }
         
+        /* Estilo para input deshabilitado */
+        input:disabled { background: #e9ecef; color: #6c757d; cursor: not-allowed; border-color: var(--color-gris); }
+        
         .btn-add-auto { background: var(--color-primario); display: none; }
         .btn-save { background: var(--color-secundario); display: none; }
         .btn-reset { background: var(--color-peligro); display: none; }
@@ -49,7 +52,7 @@
 
     <div class="panel">
         <h2>Ubicación de Firmas</h2>
-        <p>Sube el documento en PDF y posiciona las Firmas.</p>
+        <p>Sube el documento y posiciona los recuadros. No se permiten firmas fuera del área.</p>
         
         <label for="pdfFile" class="upload-area" id="drop-area">
             <span style="font-size: 30px;">📄</span><br><br>
@@ -66,7 +69,7 @@
         
         <div id="paginacion-container">
             <button id="btnAnterior" onclick="cambiarPagina(-1)">◀ Anterior</button>
-            <span>Página <input type="number" id="input-pagina" style="width: 45px; text-align: center;" value="1" onchange="irAPagina()"> de <span id="total-paginas">1</span></span>
+            <span>Página <input type="number" id="input-pagina" style="width: 45px; text-align: center; border: 1px solid #ccc; border-radius: 4px; padding: 4px;" value="1" onchange="irAPagina()"> de <span id="total-paginas">1</span></span>
             <button id="btnSiguiente" onclick="cambiarPagina(1)">Siguiente ▶</button>
         </div>
 
@@ -98,7 +101,6 @@
             }
         }
 
-        //Modificamos el tamaño de las firmas según la cantidad que haya.
         window.addEventListener('message', function(event) {
             if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
                 cantidadFirmantes = parseInt(event.data.cantidad) || 0;
@@ -176,7 +178,6 @@
             let pX = anclajesEncontrados[num-1] ? anclajesEncontrados[num-1].x - 20 : 50 + (num * 15);
             let pY = anclajesEncontrados[num-1] ? anclajesEncontrados[num-1].y + 35 : lowestTextY + (num * 10);
 
-            // Clamping inicial
             pX = Math.max(0, Math.min(pX, pageWidth - FIRMA_W));
             pY = Math.max(0, Math.min(pY, pageHeight - FIRMA_H));
 
@@ -212,7 +213,6 @@
                     startX = ev.clientX; startY = ev.clientY;
                     let nT = box.offsetTop - dy, nL = box.offsetLeft - dx;
 
-                    // Clamping
                     if (nL < 0) nL = 0; if (nT < 0) nT = 0;
                     if (nL + wR > pageWidth * currentScale) nL = (pageWidth * currentScale) - wR;
                     if (nT + hR > pageHeight * currentScale) nT = (pageHeight * currentScale) - hR;
@@ -246,14 +246,41 @@
             document.getElementById('btnReset').style.display = count > 0 ? 'inline-block' : 'none';
         }
 
+        // --- VALIDACIÓN ESTRICTA DE PAGINACIÓN ---
         function validarBotonesPaginacion() {
             document.getElementById('btnAnterior').disabled = (paginaActualNum <= 1);
             document.getElementById('btnSiguiente').disabled = (paginaActualNum >= totalPaginasGlobal);
-            document.getElementById('input-pagina').value = paginaActualNum;
+            
+            const inputPagina = document.getElementById('input-pagina');
+            inputPagina.value = paginaActualNum;
+            
+            // Si solo hay 1 página, deshabilitar el input
+            inputPagina.disabled = (totalPaginasGlobal <= 1);
         }
 
-        function cambiarPagina(d) { paginaActualNum += d; renderizarPagina(); }
-        function irAPagina() { let v = parseInt(document.getElementById('input-pagina').value); if(v >= 1 && v <= totalPaginasGlobal) { paginaActualNum = v; renderizarPagina(); } }
+        function cambiarPagina(d) { 
+            paginaActualNum += d; 
+            renderizarPagina(); 
+        }
+
+        // --- LÍMITES ESTRICTOS AL ESCRIBIR LA PÁGINA ---
+        function irAPagina() { 
+            const inputPagina = document.getElementById('input-pagina');
+            let v = parseInt(inputPagina.value); 
+            
+            if (isNaN(v) || v < 1) {
+                v = 1; // Si pone 0 o negativo, lo manda a la primera
+            } else if (v > totalPaginasGlobal) {
+                v = totalPaginasGlobal; // Si pone de más, lo manda a la última
+            }
+
+            if (paginaActualNum !== v) {
+                paginaActualNum = v; 
+                renderizarPagina(); 
+            } else {
+                inputPagina.value = paginaActualNum; // Resetea visualmente si es la misma
+            }
+        }
 
         function autoGuardarLocal() {
             const f = document.getElementById('pdfFile').files[0];
@@ -281,7 +308,9 @@
                     x: Number(p.x),
                     y: Number(p.y),
                     y_invertida: Math.round(pageHeight - p.y),
-                    pagina: Number(p.pagina)
+                    pagina: Number(p.pagina),
+                    ancho: FIRMA_W,
+                    alto: FIRMA_H
                 };
             });
 
