@@ -3,127 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (V4.0 - Diseño Corporativo)</title>
+    <title>Ubicación de Firmas E-digital (V4.9 - Envío Fix)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
     <style>
-        /* --- PALETA CORPORATIVA --- */
         :root {
-            --color-primario: #00C853; /* Verde vibrante */
-            --color-secundario: #157347; /* Verde oscuro */
-            --color-blanco: #FFFFFF;
-            --color-gris: #CCCCCC;
-            --color-texto: #333333;
-            --color-fondo: #f4f7f6;
-            --color-peligro: #e74c3c; /* Mantenido por UX universal */
+            --color-primario: #00C853; --color-secundario: #157347; 
+            --color-blanco: #FFFFFF; --color-gris: #CCCCCC;
+            --color-texto: #333333; --color-fondo: #f4f7f6;
+            --color-peligro: #e74c3c;
         }
 
         body { font-family: 'Inter', sans-serif; background-color: var(--color-fondo); color: var(--color-texto); display: flex; flex-direction: column; align-items: center; padding: 20px 10px; margin: 0; overflow-x: hidden; }
-        
         .panel { background: var(--color-blanco); padding: 30px 20px; border-radius: 12px; width: 100%; max-width: 800px; box-sizing: border-box; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; border: 1px solid var(--color-gris); }
-        
         h2 { margin-top: 0; color: var(--color-secundario); font-size: 24px; }
-        p { color: #666; font-size: 15px; margin-bottom: 20px; }
         
-        /* Área de carga */
-        .upload-area { border: 2px dashed var(--color-gris); border-radius: 8px; padding: 30px 10px; cursor: pointer; background: #fafafa; margin-bottom: 20px; display: block; transition: 0.3s; word-wrap: break-word; }
-        .upload-area:hover, .upload-area.dragover { border-color: var(--color-primario); background: rgba(0, 200, 83, 0.05); }
+        .upload-area { border: 2px dashed var(--color-gris); border-radius: 8px; padding: 30px 10px; cursor: pointer; background: #fafafa; margin-bottom: 20px; display: block; transition: 0.3s; }
+        .upload-area:hover { border-color: var(--color-primario); background: rgba(0, 200, 83, 0.05); }
         #pdfFile { display: none; }
         
-        /* Botones Base */
         button { background: var(--color-secundario); color: var(--color-blanco); border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; margin: 5px; }
         button:hover { background: var(--color-primario); transform: scale(1.02); }
-        button:disabled { background: var(--color-gris); color: #888; cursor: not-allowed; transform: none; }
+        button:disabled { background: var(--color-gris); color: #888; cursor: not-allowed; opacity: 0.6; }
         
-        /* Botones Específicos */
         .btn-add-auto { background: var(--color-primario); display: none; }
-        .btn-add-auto:hover { background: var(--color-secundario); }
         .btn-save { background: var(--color-secundario); display: none; }
-        .btn-save:hover { background: var(--color-primario); }
-        
-        /* Botón de Eliminar Firmas (Mantenemos Rojo por UX) */
         .btn-reset { background: var(--color-peligro); display: none; }
-        .btn-reset:hover { background: #c0392b; }
         
         .botones-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
-        
-        /* Paginación */
         #paginacion-container { display: none; align-items: center; justify-content: center; gap: 15px; margin-top: 15px; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid var(--color-gris); }
-        .btn-pagina { padding: 8px 15px; background: var(--color-secundario); font-size: 14px; width: auto; }
-        .btn-pagina:hover { background: var(--color-primario); }
-        .texto-pagina { font-weight: bold; color: var(--color-secundario); font-size: 16px; display: flex; align-items: center; gap: 5px; }
         
-        #input-pagina { width: 50px; text-align: center; font-size: 16px; font-weight: bold; color: var(--color-secundario); border: 2px solid var(--color-gris); border-radius: 6px; padding: 4px; outline: none; transition: 0.2s; }
-        #input-pagina:focus { border-color: var(--color-primario); background: rgba(0, 200, 83, 0.05); }
-        #input-pagina::-webkit-outer-spin-button, #input-pagina::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        #input-pagina[type=number] { -moz-appearance: textfield; }
-
-        /* Visor PDF */
-        #visor-container { display: none; margin-top: 20px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: var(--color-blanco); max-width: 100%; overflow: hidden; }
+        #visor-container { display: none; margin-top: 20px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.2); background: var(--color-blanco); max-width: 100%; overflow: hidden; border: 1px solid var(--color-gris); }
         canvas { display: block; max-width: 100%; height: auto; }
         
-        /* Cajitas de Firma */
-        .firma-box { position: absolute; background: rgba(0, 200, 83, 0.15); border: 2px solid var(--color-primario); color: var(--color-secundario); font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; touch-action: none; text-align: center; line-height: 1.1; padding: 2px 4px; box-sizing: border-box; overflow: visible; }
-        .firma-box:active { cursor: grabbing; background: rgba(0, 200, 83, 0.3); }
+        .firma-box { position: absolute; background: rgba(0, 200, 83, 0.15); border: 2px solid var(--color-primario); color: var(--color-secundario); font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; text-align: center; box-sizing: border-box; z-index: 10; font-size: 12px; }
+        .btn-cerrar-firma { position: absolute; top: -8px; right: -8px; background: var(--color-peligro); color: var(--color-blanco); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; z-index: 20; }
         
-        .btn-cerrar-firma { position: absolute; top: -8px; right: -8px; background: var(--color-peligro); color: var(--color-blanco); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; z-index: 20; box-shadow: 0 2px 5px rgba(0,0,0,0.3); transition: 0.2s; }
-        .btn-cerrar-firma:hover { background: #c0392b; transform: scale(1.15); }
-        
-        .nombre-firma { width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
-        .id-firma { color: var(--color-secundario); font-weight: bold; pointer-events: none; margin-top: 1px; opacity: 0.8; }
-
-        /* Guías Magnéticas */
-        .guia-magnetica { position: absolute; background-color: var(--color-primario); display: none; pointer-events: none; z-index: 5; opacity: 0.8; }
-        #guia-v { width: 1.5px; height: 100%; top: 0; }
-        #guia-h { height: 1.5px; width: 100%; left: 0; }
-
-        /* --- Animaciones del Loader Corporativo --- */
         .loader-container { text-align: center; margin-top: 20px; }
-        
-        .spinner {
-            display: inline-block;
-            width: 28px;
-            height: 28px;
-            border: 3px solid rgba(0, 200, 83, 0.2);
-            border-top: 3px solid var(--color-primario);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            vertical-align: middle;
-            margin-right: 10px;
-        }
-        
-        .loader-text {
-            display: inline-block;
-            color: var(--color-secundario);
-            font-weight: bold;
-            font-size: 15px;
-            vertical-align: middle;
-            animation: pulse 1.5s infinite ease-in-out;
-        }
-
+        .spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid rgba(0, 200, 83, 0.2); border-top: 3px solid var(--color-primario); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-
-        @media (max-width: 600px) {
-            h2 { font-size: 20px; }
-            button { width: 100%; }
-            #paginacion-container { flex-direction: column; }
-            .btn-pagina { width: 100%; }
-        }
     </style>
 </head>
 <body>
 
     <div class="panel">
         <h2>Ubicación de Firmas</h2>
-        <p>Sube el documento, navega por las páginas y ubica las firmas.</p>
+        <p>Sube el documento en PDF y posiciona las Firmas.</p>
         
         <label for="pdfFile" class="upload-area" id="drop-area">
             <span style="font-size: 30px;">📄</span><br><br>
-            <span id="file-label" style="font-weight: bold; color: var(--color-secundario); transition: 0.3s;">Toca aquí o arrastra tu PDF</span>
+            <span id="file-label" style="font-weight: bold; color: var(--color-secundario);">Selecciona tu PDF</span>
         </label>
-        <input type="file" id="pdfFile" accept="application/pdf">
+        <input type="file" id="pdfFile" accept="application/pdf" onchange="mostrarNombreArchivo()">
         
         <div class="botones-container">
             <button id="btnProcesar" onclick="procesarPDF()">1. Procesar Documento</button>
@@ -133,648 +65,238 @@
         </div>
         
         <div id="paginacion-container">
-            <button class="btn-pagina" id="btnAnterior" onclick="cambiarPagina(-1)">◀ Anterior</button>
-            <span class="texto-pagina">
-                Página 
-                <input type="number" id="input-pagina" value="1" min="1" onchange="irAPaginaEspecifica()" onkeydown="if(event.key === 'Enter') irAPaginaEspecifica()"> 
-                de <span id="total-paginas">1</span>
-            </span>
-            <button class="btn-pagina" id="btnSiguiente" onclick="cambiarPagina(1)">Siguiente ▶</button>
+            <button id="btnAnterior" onclick="cambiarPagina(-1)">◀ Anterior</button>
+            <span>Página <input type="number" id="input-pagina" style="width: 45px; text-align: center;" value="1" onchange="irAPagina()"> de <span id="total-paginas">1</span></span>
+            <button id="btnSiguiente" onclick="cambiarPagina(1)">Siguiente ▶</button>
         </div>
 
         <div id="loader" class="loader-container" style="display:none;">
             <div class="spinner"></div>
-            <span class="loader-text">Procesando y escaneando documento...</span>
+            <p>Procesando...</p>
         </div>
     </div>
 
     <div id="visor-container">
         <canvas id="pdf-canvas"></canvas>
-        <div id="guia-v" class="guia-magnetica"></div>
-        <div id="guia-h" class="guia-magnetica"></div>
     </div>
 
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        let pdfGlobal = null;
-        let paginaActualNum = 1;
-        let totalPaginasGlobal = 1;
-        
-        let pageHeight = 0;
-        let pageWidth = 0; 
-        
-        let currentScale = 1.0; 
-        
-        const FIRMA_W = 160; 
-        const FIRMA_H = 56; 
-        const UMBRAL_MAGNETICO = 12; 
+        let pdfGlobal = null, paginaActualNum = 1, totalPaginasGlobal = 1;
+        let pageHeight = 0, pageWidth = 0, currentScale = 1.0;
+        let currentJson = { positions: {} }, cantidadFirmantes = 0;
+        let anclajesEncontrados = [], lowestTextY = 100;
+        let FIRMA_W = 160, FIRMA_H = 56;
 
-        let lowestTextY = 100; 
-        let anclajesEncontrados = []; 
-
-        let currentJson = { positions: {} };
-        let htmlDelJefe = ""; 
-        let cantidadFirmantes = 0;
-
-        const fileInput = document.getElementById('pdfFile');
-        const fileLabel = document.getElementById('file-label');
-        const dropArea = document.getElementById('drop-area');
-
-        // Variables de colores de JS enlazadas a tu paleta
-        const COLOR_PRIMARIO = "#00C853";
-        const COLOR_GRIS = "#CCCCCC";
-        const COLOR_ERROR = "#e74c3c";
-        const COLOR_TEXTO = "#157347";
-
-        window.addEventListener('message', function(event) {
-            if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
-                let cantidadRecibida = parseInt(event.data.cantidad) || 0;
-                
-                if (cantidadRecibida <= 0) {
-                    alert("⚠️ Error: El documento debe tener al menos 1 firma asignada.");
-                    cantidadFirmantes = 0;
-                    document.getElementById('btnGenerar').style.display = 'none';
-                    document.getElementById('btnReset').style.display = 'none';
-                    return; 
-                }
-
-                cantidadFirmantes = cantidadRecibida > 15 ? 15 : cantidadRecibida;
-                
-                if (pdfGlobal !== null && cantidadFirmantes > 0) {
-                    actualizarBotonGenerar();
-                }
+        function mostrarNombreArchivo() {
+            const input = document.getElementById('pdfFile');
+            const label = document.getElementById('file-label');
+            if(input.files.length > 0) {
+                label.innerText = "✅ " + input.files[0].name;
+                label.style.color = "var(--color-primario)";
             }
-        });
-
-        function validarArchivo(file) {
-            if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
-                alert("❌ Archivo inválido. Por favor, arrastra ÚNICAMENTE un documento en formato PDF.");
-                fileInput.value = ""; 
-                fileLabel.textContent = "⚠️ Error: Solo se aceptan archivos PDF";
-                fileLabel.style.color = COLOR_ERROR; 
-                dropArea.style.borderColor = COLOR_ERROR; 
-                setTimeout(() => {
-                    fileLabel.textContent = "Toca aquí o arrastra tu PDF";
-                    fileLabel.style.color = COLOR_TEXTO;
-                    dropArea.style.borderColor = COLOR_GRIS;
-                }, 3500);
-                return false;
-            }
-            let name = file.name;
-            if(name.length > 25) name = name.substring(0, 22) + '...';
-            fileLabel.textContent = "✅ " + name;
-            fileLabel.style.color = COLOR_PRIMARIO;
-            dropArea.style.borderColor = COLOR_PRIMARIO;
-            return true;
         }
 
-        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
-        dropArea.addEventListener('dragleave', () => { dropArea.classList.remove('dragover'); });
-        dropArea.addEventListener('drop', (e) => { 
-            e.preventDefault(); 
-            dropArea.classList.remove('dragover'); 
-            if(e.dataTransfer.files.length) { 
-                const file = e.dataTransfer.files[0];
-                if (validarArchivo(file)) {
-                    const dataTransfer = new DataTransfer();
-                    dataTransfer.items.add(file);
-                    fileInput.files = dataTransfer.files; 
+        //Modificamos el tamaño de las firmas según la cantidad que haya.
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
+                cantidadFirmantes = parseInt(event.data.cantidad) || 0;
+                if (event.data.metadata && event.data.metadata.ancho) {
+                    FIRMA_W = parseInt(event.data.metadata.ancho);
+                    FIRMA_H = parseInt(event.data.metadata.alto);
+                } else {
+                    FIRMA_W = [1, 2, 4].includes(cantidadFirmantes) ? 200 : 160;
+                    FIRMA_H = [1, 2, 4].includes(cantidadFirmantes) ? 70 : 56;
                 }
-            } 
+                if (pdfGlobal) actualizarUI();
+            }
         });
 
-        fileInput.addEventListener('change', () => { if(fileInput.files.length > 0) validarArchivo(fileInput.files[0]); });
-
         async function procesarPDF() {
-            const file = fileInput.files[0];
-            if (!file) return alert("Selecciona un PDF primero.");
-
+            const file = document.getElementById('pdfFile').files[0];
+            if (!file) return alert("Selecciona un PDF.");
             document.getElementById('btnProcesar').style.display = 'none';
             document.getElementById('loader').style.display = 'block';
-            document.getElementById('drop-area').style.display = 'none'; 
 
             try {
                 const fileURL = URL.createObjectURL(file);
                 pdfGlobal = await pdfjsLib.getDocument(fileURL).promise;
                 totalPaginasGlobal = pdfGlobal.numPages;
-                paginaActualNum = totalPaginasGlobal; 
-                
                 document.getElementById('total-paginas').innerText = totalPaginasGlobal;
-                document.getElementById('input-pagina').max = totalPaginasGlobal; 
-                
-                document.querySelectorAll('.firma-box').forEach(box => box.remove());
-                currentJson.positions = {};
-                htmlDelJefe = "<div>Contenido procesado localmente.</div>"; 
-                
-                await renderizarPaginaActual();
-                
+                await renderizarPagina();
                 document.getElementById('visor-container').style.display = 'block';
                 document.getElementById('paginacion-container').style.display = 'flex';
-                document.getElementById('btnGuardar').style.display = 'inline-block'; 
-                
-                restaurarBorradorLocal(); 
-                
-                actualizarBotonesPaginacion();
-
-                if (cantidadFirmantes > 0) {
-                    actualizarBotonGenerar();
-                }
-            } catch (err) {
-                alert("❌ Error: " + err.message);
-                document.getElementById('drop-area').style.display = 'block';
-                document.getElementById('btnProcesar').style.display = 'inline-block';
-            } finally {
-                document.getElementById('loader').style.display = 'none';
-            }
+                document.getElementById('btnGuardar').style.display = 'inline-block';
+                restaurarBorradorLocal();
+                actualizarUI();
+            } catch (e) { alert("Error: " + e.message); }
+            finally { document.getElementById('loader').style.display = 'none'; }
         }
 
-        async function cambiarPagina(delta) {
-            let nuevaPagina = paginaActualNum + delta;
-            if (nuevaPagina >= 1 && nuevaPagina <= totalPaginasGlobal) {
-                paginaActualNum = nuevaPagina;
-                await renderizarPaginaActual();
-                actualizarBotonesPaginacion();
-                actualizarVisibilidadFirmas(); 
-            }
-        }
-
-        async function irAPaginaEspecifica() {
-            let input = document.getElementById('input-pagina');
-            let nuevaPagina = parseInt(input.value);
-            if (isNaN(nuevaPagina) || nuevaPagina < 1) nuevaPagina = 1;
-            else if (nuevaPagina > totalPaginasGlobal) nuevaPagina = totalPaginasGlobal;
-            
-            if (nuevaPagina !== paginaActualNum) {
-                paginaActualNum = nuevaPagina;
-                await renderizarPaginaActual();
-                actualizarBotonesPaginacion();
-                actualizarVisibilidadFirmas();
-            } else {
-                input.value = paginaActualNum;
-            }
-            input.blur(); 
-        }
-
-        function actualizarBotonesPaginacion() {
-            document.getElementById('input-pagina').value = paginaActualNum; 
-            document.getElementById('btnAnterior').disabled = (paginaActualNum <= 1);
-            document.getElementById('btnSiguiente').disabled = (paginaActualNum >= totalPaginasGlobal);
-        }
-
-        async function renderizarPaginaActual() {
+        async function renderizarPagina() {
             const page = await pdfGlobal.getPage(paginaActualNum);
-            const viewportSinEscala = page.getViewport({ scale: 1.0 });
-            
-            pageWidth = viewportSinEscala.width; 
-            pageHeight = viewportSinEscala.height; 
+            const vp = page.getViewport({ scale: 1.0 });
+            pageWidth = vp.width; pageHeight = vp.height;
 
-            if (!currentJson.metadata) currentJson.metadata = {};
-            currentJson.metadata[paginaActualNum] = { rotacion: page.rotate };
-
-            anclajesEncontrados = []; 
-            const palabrasClave = [
-                "rut", "run", "c.i", "c.i.", "cedula", 
-                "dni", "ruc", "c.e.", "curp", "rfc", "ine", "ife", "patron",
-                "firma", "empleador", "trabajador", "empleado", "empresa", 
-                "representante", "apoderado", "cliente", "proveedor", 
-                "contratante", "contratista", "arrendador", "arrendatario", 
-                "vendedor", "comprador"
-            ];
-            let hallazgos = []; 
-
+            const claves = ["rut", "run", "c.i", "c.i.", "cedula", "dni", "ruc", "c.e.", "curp", "rfc", "ine", "ife", "patron", "firma", "empleador", "trabajador", "empleado", "empresa", "representante", "apoderado", "cliente", "proveedor", "contratante", "contratista", "arrendador", "arrendatario", "vendedor", "comprador"];
             try {
-                const textContent = await page.getTextContent();
-                let minY = pageHeight; 
-                
-                if (textContent.items.length > 0) {
-                    textContent.items.forEach(item => {
-                        let textoOriginal = item.str.trim();
-                        let textoMinuscula = textoOriginal.toLowerCase();
-
-                        if (textoMinuscula.includes("documento con firma") || textoMinuscula.includes("electrónica")) {
-                            return; 
-                        }
-
-                        if (textoMinuscula.length > 0) {
-                            let coordX = item.transform[4];
-                            let coordY = item.transform[5];
-
-                            if (textoOriginal.length < 45) {
-                                palabrasClave.forEach(clave => {
-                                    if (textoMinuscula.includes(clave)) {
-                                        hallazgos.push({ x: coordX, y: coordY, palabra: textoOriginal });
-                                    }
-                                });
-                            }
-                            if (coordY < minY) minY = coordY; 
-                        }
-                    });
-
-                    hallazgos.sort((a, b) => a.y - b.y);
-
-                    let anclajesFiltrados = [];
-                    hallazgos.forEach(h => {
-                        let esMismaZona = anclajesFiltrados.find(a => Math.abs(a.x - h.x) < 150 && Math.abs(a.y - h.y) < 60);
-                        if (!esMismaZona) {
-                            anclajesFiltrados.push(h); 
-                        }
-                    });
-
-                    anclajesFiltrados.sort((a, b) => a.x - b.x);
-
-                    for (let i = 0; i < anclajesFiltrados.length; i++) {
-                        for (let j = i + 1; j < anclajesFiltrados.length; j++) {
-                            if (Math.abs(anclajesFiltrados[i].y - anclajesFiltrados[j].y) < 80) {
-                                anclajesFiltrados[j].y = anclajesFiltrados[i].y; 
-                            }
-                        }
+                const text = await page.getTextContent();
+                let finds = [];
+                let minY = pageHeight;
+                text.items.forEach(it => {
+                    if (claves.some(p => it.str.toLowerCase().includes(p))) {
+                        finds.push({ x: it.transform[4], y: it.transform[5] });
                     }
+                    if (it.transform[5] < minY) minY = it.transform[5];
+                });
+                finds.sort((a, b) => b.x - a.x);
+                anclajesEncontrados = finds;
+                lowestTextY = minY - 80;
+            } catch(e) { lowestTextY = 100; }
 
-                    anclajesEncontrados = anclajesFiltrados;
-                    lowestTextY = minY - 70; 
-                } else {
-                    lowestTextY = 100; 
-                }
-            } catch(e) { 
-                lowestTextY = 100; 
-            }
-            
-            if (lowestTextY < 20) lowestTextY = 20;
-
-            const anchoDisponible = Math.min(window.innerWidth - 30, 800); 
-            currentScale = anchoDisponible / viewportSinEscala.width;
-            if (currentScale > 1.5) currentScale = 1.5; 
-
-            const viewport = page.getViewport({ scale: currentScale }); 
+            currentScale = Math.min(window.innerWidth - 30, 800) / pageWidth;
+            const viewport = page.getViewport({ scale: currentScale });
             const canvas = document.getElementById('pdf-canvas');
-            const context = canvas.getContext('2d');
-            canvas.width = viewport.width; 
-            canvas.height = viewport.height;
-            document.getElementById('visor-container').style.width = viewport.width + "px";
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
             
-            await page.render({ canvasContext: context, viewport: viewport }).promise;
-            reposicionarFirmasPorEscala();
-        }
-
-        function actualizarVisibilidadFirmas() {
-            document.querySelectorAll('.firma-box').forEach(box => {
-                let key = box.id.replace('box-', '');
-                if (currentJson.positions[key] && currentJson.positions[key].pagina === paginaActualNum) {
-                    box.style.display = 'flex';
-                } else {
-                    box.style.display = 'none';
-                }
-            });
-        }
-
-        function reposicionarFirmasPorEscala() {
-            document.querySelectorAll('.firma-box').forEach(box => {
-                let key = box.id.replace('box-', '');
-                if (currentJson.positions[key] && currentJson.positions[key].pagina === paginaActualNum) {
-                    colocarCaja(box.id, currentJson.positions[key]);
-                }
-            });
-        }
-
-        function obtenerSiguienteNumeroDisponible() {
-            for (let i = 1; i <= cantidadFirmantes; i++) {
-                if (!currentJson.positions['signer-' + i]) return i;
-            }
-            return null;
-        }
-
-        function actualizarBotonGenerar() {
-            let generadas = Object.keys(currentJson.positions).length;
-            const btnGen = document.getElementById('btnGenerar');
-            const btnReset = document.getElementById('btnReset'); 
-            
-            btnGen.style.display = 'inline-block';
-            
-            if (generadas >= cantidadFirmantes && cantidadFirmantes > 0) {
-                btnGen.innerHTML = "✅ Firmas Generadas";
-                btnGen.style.background = COLOR_GRIS; 
-                btnGen.style.color = "#888"; // Texto más oscuro para contraste
-            } else {
-                btnGen.innerHTML = `2. Añadir Firma (${generadas}/${cantidadFirmantes})`;
-                btnGen.style.background = COLOR_PRIMARIO;
-                btnGen.style.color = "#FFFFFF";
-            }
-
-            if (generadas > 0) {
-                btnReset.style.display = 'inline-block';
-            } else {
-                btnReset.style.display = 'none';
-            }
-        }
-
-        function limpiarFirmas() {
-            let generadas = Object.keys(currentJson.positions).length;
-            
-            if (generadas === 0) {
-                return alert("No hay firmas ubicadas para eliminar.");
-            }
-
-            if (confirm(`¿Estás seguro de que deseas eliminar las ${generadas} firma(s) que ya ubicaste?`)) {
-                document.querySelectorAll('.firma-box').forEach(box => box.remove());
-                currentJson.positions = {};
-                actualizarBotonGenerar(); 
-                autoGuardarLocal(); 
-            }
+            reubicarCajasExistentes();
+            validarBotonesPaginacion();
         }
 
         function agregarSiguienteFirma() {
-            let numeroFirma = obtenerSiguienteNumeroDisponible();
-            if (!numeroFirma) return; 
-
-            let signerKey = 'signer-' + numeroFirma;
-            
-            let posX = 50; 
-            let posY = lowestTextY; 
-            let total = cantidadFirmantes; 
-            
-            if (anclajesEncontrados.length > 0 && anclajesEncontrados[numeroFirma - 1]) {
-                let ancla = anclajesEncontrados[numeroFirma - 1];
-                posX = ancla.x - 30; 
-                posY = ancla.y + 40; 
-            } else {
-                if (total === 1) {
-                    posX = (pageWidth - FIRMA_W) / 2; 
-                } else {
-                    let seccion = pageWidth / (total + 1);
-                    posX = (seccion * numeroFirma) - (FIRMA_W / 2); 
-                }
+            let num = 0;
+            for(let i=1; i<=cantidadFirmantes; i++) {
+                if(!currentJson.positions['signer-'+i]) { num = i; break; }
             }
+            if(!num) return;
 
-            if (posX < 10) posX = 10;
-            if (posX > pageWidth - (FIRMA_W + 10)) posX = pageWidth - (FIRMA_W + 10);
-            
-            currentJson.positions[signerKey] = { 
-                x: Math.round(posX), 
-                y: Math.round(posY), 
-                pagina: paginaActualNum 
-            };
-            
+            const key = 'signer-' + num;
+            let pX = anclajesEncontrados[num-1] ? anclajesEncontrados[num-1].x - 20 : 50 + (num * 15);
+            let pY = anclajesEncontrados[num-1] ? anclajesEncontrados[num-1].y + 35 : lowestTextY + (num * 10);
+
+            // Clamping inicial
+            pX = Math.max(0, Math.min(pX, pageWidth - FIRMA_W));
+            pY = Math.max(0, Math.min(pY, pageHeight - FIRMA_H));
+
+            currentJson.positions[key] = { x: Math.round(pX), y: Math.round(pY), pagina: paginaActualNum };
+            dibujarCaja(key, currentJson.positions[key]);
+            actualizarUI();
+            autoGuardarLocal();
+        }
+
+        function dibujarCaja(key, pos) {
+            if(pos.pagina !== paginaActualNum) return;
+            const old = document.getElementById('box-' + key);
+            if(old) old.remove();
+
             const box = document.createElement('div');
-            box.id = 'box-' + signerKey; 
-            box.className = 'firma-box';
-            
-            box.innerHTML = `
-                <div class="btn-cerrar-firma" onclick="eliminarFirma(event, '${signerKey}')">×</div>
-                <div class="nombre-firma" style="font-size: 11px;">Firmante ${numeroFirma}</div> 
-                <div class="id-firma" style="font-size: 9px;">[${signerKey}]</div>
-            `;
+            box.id = 'box-' + key; box.className = 'firma-box';
+            box.innerHTML = `<div class="btn-cerrar-firma" onclick="eliminarFirma(event, '${key}')">×</div>
+                             <span>Firmante ${key.split('-')[1]}</span>`;
             
             document.getElementById('visor-container').appendChild(box);
-            colocarCaja(box.id, currentJson.positions[signerKey]);
-            actualizarBotonGenerar();
-            autoGuardarLocal(); 
+            
+            const wR = FIRMA_W * currentScale;
+            const hR = FIRMA_H * currentScale;
+            box.style.width = wR + 'px'; box.style.height = hR + 'px';
+            box.style.left = (pos.x * currentScale) + "px";
+            box.style.top = ((pageHeight - pos.y - FIRMA_H) * currentScale) + "px";
+            
+            box.onmousedown = (e) => {
+                if(e.target.className.includes('cerrar')) return;
+                let startX = e.clientX, startY = e.clientY;
+                document.onmousemove = (ev) => {
+                    let dx = startX - ev.clientX, dy = startY - ev.clientY;
+                    startX = ev.clientX; startY = ev.clientY;
+                    let nT = box.offsetTop - dy, nL = box.offsetLeft - dx;
+
+                    // Clamping
+                    if (nL < 0) nL = 0; if (nT < 0) nT = 0;
+                    if (nL + wR > pageWidth * currentScale) nL = (pageWidth * currentScale) - wR;
+                    if (nT + hR > pageHeight * currentScale) nT = (pageHeight * currentScale) - hR;
+
+                    box.style.top = nT + "px"; box.style.left = nL + "px";
+                    currentJson.positions[key].x = Math.round(nL / currentScale);
+                    currentJson.positions[key].y = Math.round(pageHeight - (nT / currentScale) - FIRMA_H);
+                };
+                document.onmouseup = () => { document.onmousemove = null; autoGuardarLocal(); };
+            };
         }
 
-        window.eliminarFirma = function(event, signerKey) {
-            event.stopPropagation(); 
-            let box = document.getElementById('box-' + signerKey);
-            if(box) box.remove();
-            delete currentJson.positions[signerKey];
-            actualizarBotonGenerar(); 
-            autoGuardarLocal(); 
-        };
-
-        function colocarCaja(id, pos) {
-            const box = document.getElementById(id);
-            if(!box) return;
-
-            let wReal = FIRMA_W * currentScale;
-            let hReal = FIRMA_H * currentScale;
-            
-            box.style.width = wReal + 'px';
-            box.style.height = hReal + 'px';
-            
-            let nombreFirma = box.querySelector('.nombre-firma');
-            let idFirma = box.querySelector('.id-firma');
-            if (nombreFirma) nombreFirma.style.fontSize = Math.max(6, (11 * currentScale)) + 'px';
-            if (idFirma) idFirma.style.fontSize = Math.max(5, (9 * currentScale)) + 'px';
-
-            box.style.left = (pos.x * currentScale) + 'px'; 
-            box.style.top = ((pageHeight - pos.y - FIRMA_H) * currentScale) + 'px';
-            
-            hacerArrastrable(box, id.replace('box-', ''));
+        function reubicarCajasExistentes() {
+            document.querySelectorAll('.firma-box').forEach(b => b.remove());
+            Object.keys(currentJson.positions).forEach(k => dibujarCaja(k, currentJson.positions[k]));
         }
 
-        function hacerArrastrable(elmnt, signerKey) {
-            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-            let logicaLeft = 0, logicaTop = 0; 
-            
-            const guiaV = document.getElementById('guia-v');
-            const guiaH = document.getElementById('guia-h');
+        function eliminarFirma(e, k) { e.stopPropagation(); document.getElementById('box-'+k).remove(); delete currentJson.positions[k]; actualizarUI(); autoGuardarLocal(); }
+        
+        function limpiarFirmas() {
+            if(!confirm("¿Borrar todo?")) return;
+            currentJson.positions = {}; reubicarCajasExistentes(); actualizarUI(); autoGuardarLocal();
+        }
 
-            elmnt.onmousedown = dragMouseDown;
-            elmnt.ontouchstart = dragTouchStart;
+        function actualizarUI() {
+            const count = Object.keys(currentJson.positions).length;
+            const btn = document.getElementById('btnGenerar');
+            btn.style.display = 'inline-block';
+            btn.innerText = count >= cantidadFirmantes ? "✅ Completado" : `2. Añadir Firma (${count}/${cantidadFirmantes})`;
+            btn.disabled = (count >= cantidadFirmantes || cantidadFirmantes === 0);
+            document.getElementById('btnReset').style.display = count > 0 ? 'inline-block' : 'none';
+        }
 
-            function dragMouseDown(e) {
-                if(e.target.className === 'btn-cerrar-firma') return; 
-                e.preventDefault();
-                pos3 = e.clientX; pos4 = e.clientY;
-                logicaLeft = elmnt.offsetLeft; 
-                logicaTop = elmnt.offsetTop;
-                document.onmouseup = closeDragElement;
-                document.onmousemove = elementDrag;
-                elmnt.style.zIndex = 10;
-            }
+        function validarBotonesPaginacion() {
+            document.getElementById('btnAnterior').disabled = (paginaActualNum <= 1);
+            document.getElementById('btnSiguiente').disabled = (paginaActualNum >= totalPaginasGlobal);
+            document.getElementById('input-pagina').value = paginaActualNum;
+        }
 
-            function dragTouchStart(e) {
-                if(e.target.className === 'btn-cerrar-firma') return;
-                pos3 = e.touches[0].clientX; pos4 = e.touches[0].clientY;
-                logicaLeft = elmnt.offsetLeft; 
-                logicaTop = elmnt.offsetTop;
-                document.ontouchend = closeDragElement;
-                document.ontouchmove = touchDrag;
-                elmnt.style.zIndex = 10;
-            }
+        function cambiarPagina(d) { paginaActualNum += d; renderizarPagina(); }
+        function irAPagina() { let v = parseInt(document.getElementById('input-pagina').value); if(v >= 1 && v <= totalPaginasGlobal) { paginaActualNum = v; renderizarPagina(); } }
 
-            function elementDrag(e) { e.preventDefault(); moverCaja(e.clientX, e.clientY); }
-            function touchDrag(e) { e.preventDefault(); moverCaja(e.touches[0].clientX, e.touches[0].clientY); }
+        function autoGuardarLocal() {
+            const f = document.getElementById('pdfFile').files[0];
+            if(f) localStorage.setItem('borrador_' + f.name, JSON.stringify({ p: currentJson.positions, c: cantidadFirmantes, w: FIRMA_W, h: FIRMA_H }));
+        }
 
-            function moverCaja(clientX, clientY) {
-                pos1 = pos3 - clientX;
-                pos2 = pos4 - clientY;
-                pos3 = clientX;
-                pos4 = clientY;
-
-                logicaTop = logicaTop - pos2;
-                logicaLeft = logicaLeft - pos1;
-
-                const container = document.getElementById('pdf-canvas');
-                const maxTop = container.height - (FIRMA_H * currentScale); 
-                const maxLeft = container.width - (FIRMA_W * currentScale); 
-
-                if (logicaTop < 0) logicaTop = 0;
-                if (logicaTop > maxTop) logicaTop = maxTop;
-                if (logicaLeft < 0) logicaLeft = 0;
-                if (logicaLeft > maxLeft) logicaLeft = maxLeft;
-
-                let visualTop = logicaTop;
-                let visualLeft = logicaLeft;
-                let snapV = false, snapH = false;
-                
-                document.querySelectorAll('.firma-box').forEach(otraCaja => {
-                    if (otraCaja.id !== elmnt.id && otraCaja.style.display !== 'none') {
-                        let otraTop = otraCaja.offsetTop;
-                        let otraLeft = otraCaja.offsetLeft;
-
-                        if (Math.abs(logicaLeft - otraLeft) < UMBRAL_MAGNETICO) {
-                            visualLeft = otraLeft; 
-                            snapV = true;
-                            guiaV.style.left = visualLeft + "px";
-                            guiaV.style.display = "block";
-                        }
-                        if (Math.abs(logicaTop - otraTop) < UMBRAL_MAGNETICO) {
-                            visualTop = otraTop; 
-                            snapH = true;
-                            guiaH.style.top = visualTop + "px";
-                            guiaH.style.display = "block";
-                        }
-                    }
-                });
-
-                if (!snapV) guiaV.style.display = "none";
-                if (!snapH) guiaH.style.display = "none";
-
-                elmnt.style.top = visualTop + "px";
-                elmnt.style.left = visualLeft + "px";
-
-                let xFinal = Math.round(visualLeft / currentScale);
-                let yFinal = Math.round(pageHeight - (visualTop / currentScale) - FIRMA_H);
-
-                if (currentJson.positions[signerKey]) {
-                    currentJson.positions[signerKey].x = Math.max(0, xFinal);
-                    currentJson.positions[signerKey].y = Math.max(0, yFinal);
-                    currentJson.positions[signerKey].pagina = paginaActualNum; 
-                }
-            }
-
-            function closeDragElement() {
-                document.onmouseup = null; document.onmousemove = null;
-                document.ontouchend = null; document.ontouchmove = null;
-                elmnt.style.zIndex = 1;
-                guiaV.style.display = "none";
-                guiaH.style.display = "none";
-                autoGuardarLocal(); 
+        function restaurarBorradorLocal() {
+            const f = document.getElementById('pdfFile').files[0];
+            const s = f ? localStorage.getItem('borrador_' + f.name) : null;
+            if(s) {
+                const d = JSON.parse(s); currentJson.positions = d.p;
+                if(!cantidadFirmantes) { cantidadFirmantes = d.c; FIRMA_W = d.w; FIRMA_H = d.h; }
+                reubicarCajasExistentes();
             }
         }
 
         function enviarAE_digital() {
-            let generadas = Object.keys(currentJson.positions).length;
+            const keys = Object.keys(currentJson.positions);
+            if (keys.length < cantidadFirmantes) return alert("Ubica todas las firmas.");
 
-            if (cantidadFirmantes === 0) {
-                return alert("Acción no permitida: El sistema aún no ha definido la cantidad de firmas requeridas para este documento.");
-            }
-
-            if (generadas === 0) {
-                return alert("Error: No has ubicado ninguna firma en el documento.");
-            }
-
-            if (generadas < cantidadFirmantes) {
-                return alert(`Falta ubicar firmas. Llevas ${generadas} de ${cantidadFirmantes}.`);
-            }
-
-            let coordenadasCompletas = {};
-            
-            for (let key in currentJson.positions) {
-                let original = currentJson.positions[key];
-                
-                coordenadasCompletas[key] = {
-                    x: original.x, 
-                    y: original.y, 
-                    y_invertida: Math.round(pageHeight - original.y), 
-                    pagina: original.pagina
+            let coords = {};
+            keys.forEach(k => {
+                let p = currentJson.positions[k];
+                coords[k] = {
+                    x: Number(p.x),
+                    y: Number(p.y),
+                    y_invertida: Math.round(pageHeight - p.y),
+                    pagina: Number(p.pagina)
                 };
-            }
+            });
 
-            const paqueteFinal = {
-                tipo: 'GUARDAR_PLANTILLA_COMPLETA',
+            const msg = {
+                tipo: 'GUARDAR_PLANTILLA_FIRMAS',
                 datos: {
-                    html_documento: htmlDelJefe,
-                    coordenadas_firmas: coordenadasCompletas, 
-                    total_firmas: generadas
+                    coordenadas: coords,
+                    total: cantidadFirmantes,
+                    dimensiones: { w: FIRMA_W, h: FIRMA_H }
                 }
             };
 
-            window.parent.postMessage(paqueteFinal, '*');
-            console.log("PAQUETE ENVIADO (JSON UNIVERSAL):", paqueteFinal);
-
-            const file = document.getElementById('pdfFile').files[0];
-            if (file) {
-                localStorage.removeItem('borrador_firmas_' + file.name);
-            }
-
-            const btn = document.getElementById('btnGuardar');
-            btn.innerHTML = "✅ Configuración Enviada";
-            btn.style.background = COLOR_PRIMARIO; 
-            setTimeout(() => { btn.innerHTML = "3. Guardar Configuración"; btn.style.background = ""; }, 2500);
-        }
-
-        // --- SISTEMA DE ESTADO PERSISTENTE MEJORADO ---
-
-        function autoGuardarLocal() {
-            const file = document.getElementById('pdfFile').files[0];
-            if (!file) return;
-            
-            const nombreUnico = 'borrador_firmas_' + file.name;
-            const estadoA_Guardar = {
-                posiciones: currentJson.positions,
-                totalRequerido: cantidadFirmantes
-            };
-            localStorage.setItem(nombreUnico, JSON.stringify(estadoA_Guardar));
-        }
-
-        function restaurarBorradorLocal() {
-            const file = document.getElementById('pdfFile').files[0];
-            if (!file) return;
-
-            const nombreUnico = 'borrador_firmas_' + file.name;
-            const borrador = localStorage.getItem(nombreUnico);
-            
-            if (borrador) {
-                try {
-                    const datosBorrador = JSON.parse(borrador);
-
-                    let posicionesGuardadas = datosBorrador.posiciones ? datosBorrador.posiciones : datosBorrador;
-                    let cantidadRequeridaGuardada = datosBorrador.totalRequerido ? datosBorrador.totalRequerido : Object.keys(posicionesGuardadas).length;
-
-                    let cantidadBorrador = Object.keys(posicionesGuardadas).length;
-                    
-                    if (cantidadBorrador > 0) {
-                        currentJson.positions = posicionesGuardadas;
-
-                        if (cantidadFirmantes === 0 && cantidadRequeridaGuardada > 0) {
-                            cantidadFirmantes = cantidadRequeridaGuardada;
-                        }
-                        
-                        for (let signerKey in currentJson.positions) {
-                            let pos = currentJson.positions[signerKey];
-                            let numeroFirma = signerKey.split('-')[1];
-                            
-                            const box = document.createElement('div');
-                            box.id = 'box-' + signerKey; 
-                            box.className = 'firma-box';
-                            box.style.display = (pos.pagina === paginaActualNum) ? 'flex' : 'none';
-                            
-                            box.innerHTML = `
-                                <div class="btn-cerrar-firma" onclick="eliminarFirma(event, '${signerKey}')">×</div>
-                                <div class="nombre-firma" style="font-size: 11px;">Firmante ${numeroFirma}</div> 
-                                <div class="id-firma" style="font-size: 9px;">[${signerKey}]</div>
-                            `;
-                            
-                            document.getElementById('visor-container').appendChild(box);
-                            colocarCaja(box.id, pos);
-                        }
-                        actualizarBotonGenerar();
-                    }
-                } catch(e) {
-                    console.error("Error al restaurar borrador:", e);
-                }
-            }
+            console.log("ENVIANDO:", msg);
+            window.parent.postMessage(msg, '*');
+            alert("Enviado correctamente.");
         }
     </script>
 </body>
