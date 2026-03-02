@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas e-Dgital)</title>
+    <title>Ubicación de Firmas E-digital (V4.11 - Validación PDF & Fixes)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -19,15 +19,15 @@
         .panel { background: var(--color-blanco); padding: 30px 20px; border-radius: 12px; width: 100%; max-width: 800px; box-sizing: border-box; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; border: 1px solid var(--color-gris); }
         h2 { margin-top: 0; color: var(--color-secundario); font-size: 24px; }
         
-        .upload-area { border: 2px dashed var(--color-gris); border-radius: 8px; padding: 30px 10px; cursor: pointer; background: #fafafa; margin-bottom: 20px; display: block; transition: 0.3s; }
-        .upload-area:hover { border-color: var(--color-primario); background: rgba(0, 200, 83, 0.05); }
+        /* Área de carga mejorada */
+        .upload-area { border: 2px dashed var(--color-gris); border-radius: 8px; padding: 30px 10px; cursor: pointer; background: #fafafa; margin-bottom: 20px; display: block; transition: 0.3s; word-wrap: break-word; }
+        .upload-area:hover, .upload-area.dragover { border-color: var(--color-primario); background: rgba(0, 200, 83, 0.05); }
         #pdfFile { display: none; }
         
         button { background: var(--color-secundario); color: var(--color-blanco); border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s; margin: 5px; }
         button:hover { background: var(--color-primario); transform: scale(1.02); }
         button:disabled { background: var(--color-gris); color: #888; cursor: not-allowed; opacity: 0.6; }
         
-        /* Estilo para input deshabilitado */
         input:disabled { background: #e9ecef; color: #6c757d; cursor: not-allowed; border-color: var(--color-gris); }
         
         .btn-add-auto { background: var(--color-primario); display: none; }
@@ -52,11 +52,11 @@
 
     <div class="panel">
         <h2>Ubicación de Firmas</h2>
-        <p>Sube el documento en PDF y posiciona las Firmas.</p>
+        <p>Sube el documento PDF y posiciona las Firmas.</p>
         
         <label for="pdfFile" class="upload-area" id="drop-area">
             <span style="font-size: 30px;">📄</span><br><br>
-            <span id="file-label" style="font-weight: bold; color: var(--color-secundario);">Selecciona tu PDF</span>
+            <span id="file-label" style="font-weight: bold; color: var(--color-secundario);">Toca aquí o arrastra tu archivo PDF</span>
         </label>
         <input type="file" id="pdfFile" accept="application/pdf" onchange="mostrarNombreArchivo()">
         
@@ -92,14 +92,56 @@
         let anclajesEncontrados = [], lowestTextY = 100;
         let FIRMA_W = 160, FIRMA_H = 56;
 
+        // --- VALIDACIÓN DE PDF Y DRAG & DROP RESTAURADA ---
+        function validarArchivo(file) {
+            if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
+                alert("❌ Archivo inválido. Por favor, sube ÚNICAMENTE un documento en formato PDF.");
+                document.getElementById('pdfFile').value = ""; 
+                document.getElementById('file-label').textContent = "⚠️ Error: Solo se aceptan archivos PDF";
+                document.getElementById('file-label').style.color = "var(--color-peligro)";
+                document.getElementById('drop-area').style.borderColor = "var(--color-peligro)";
+                
+                setTimeout(() => {
+                    document.getElementById('file-label').textContent = "Toca aquí o arrastra tu archivo PDF";
+                    document.getElementById('file-label').style.color = "var(--color-secundario)";
+                    document.getElementById('drop-area').style.borderColor = "var(--color-gris)";
+                }, 3500);
+                return false;
+            }
+            return true;
+        }
+
         function mostrarNombreArchivo() {
             const input = document.getElementById('pdfFile');
             const label = document.getElementById('file-label');
             if(input.files.length > 0) {
-                label.innerText = "✅ " + input.files[0].name;
-                label.style.color = "var(--color-primario)";
+                const file = input.files[0];
+                if (validarArchivo(file)) {
+                    label.innerText = "✅ " + file.name;
+                    label.style.color = "var(--color-primario)";
+                    document.getElementById('drop-area').style.borderColor = "var(--color-primario)";
+                }
             }
         }
+
+        // Eventos Drag and Drop
+        const dropArea = document.getElementById('drop-area');
+        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
+        dropArea.addEventListener('dragleave', () => { dropArea.classList.remove('dragover'); });
+        dropArea.addEventListener('drop', (e) => { 
+            e.preventDefault(); 
+            dropArea.classList.remove('dragover'); 
+            if(e.dataTransfer.files.length) { 
+                const file = e.dataTransfer.files[0];
+                if (validarArchivo(file)) {
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    document.getElementById('pdfFile').files = dataTransfer.files; 
+                    mostrarNombreArchivo();
+                }
+            } 
+        });
+        // ----------------------------------------------------
 
         window.addEventListener('message', function(event) {
             if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
@@ -118,6 +160,10 @@
         async function procesarPDF() {
             const file = document.getElementById('pdfFile').files[0];
             if (!file) return alert("Selecciona un PDF.");
+            
+            // Re-validación por seguridad
+            if (!validarArchivo(file)) return;
+
             document.getElementById('btnProcesar').style.display = 'none';
             document.getElementById('loader').style.display = 'block';
 
@@ -246,15 +292,12 @@
             document.getElementById('btnReset').style.display = count > 0 ? 'inline-block' : 'none';
         }
 
-        // --- VALIDACIÓN ESTRICTA DE PAGINACIÓN ---
         function validarBotonesPaginacion() {
             document.getElementById('btnAnterior').disabled = (paginaActualNum <= 1);
             document.getElementById('btnSiguiente').disabled = (paginaActualNum >= totalPaginasGlobal);
             
             const inputPagina = document.getElementById('input-pagina');
             inputPagina.value = paginaActualNum;
-            
-            // Si solo hay 1 página, se deshabilita el input
             inputPagina.disabled = (totalPaginasGlobal <= 1);
         }
 
@@ -263,22 +306,17 @@
             renderizarPagina(); 
         }
 
-        // --- LÍMITES ESTRICTOS AL ESCRIBIR LA PÁGINA ---
         function irAPagina() { 
             const inputPagina = document.getElementById('input-pagina');
             let v = parseInt(inputPagina.value); 
-            
-            if (isNaN(v) || v < 1) {
-                v = 1; // Si pone 0 o negativo, lo manda a la primera
-            } else if (v > totalPaginasGlobal) {
-                v = totalPaginasGlobal; // Si pone de más, lo manda a la última
-            }
+            if (isNaN(v) || v < 1) v = 1; 
+            else if (v > totalPaginasGlobal) v = totalPaginasGlobal; 
 
             if (paginaActualNum !== v) {
                 paginaActualNum = v; 
                 renderizarPagina(); 
             } else {
-                inputPagina.value = paginaActualNum; // Resetea visualmente si es la misma
+                inputPagina.value = paginaActualNum; 
             }
         }
 
@@ -299,7 +337,7 @@
 
         function enviarAE_digital() {
             const keys = Object.keys(currentJson.positions);
-            if (keys.length < cantidadFirmantes) return alert("Ubica todas las firmas.");
+            if (keys.length < cantidadFirmantes) return alert(`Faltan firmas (${keys.length}/${cantidadFirmantes})`);
 
             let coords = {};
             keys.forEach(k => {
@@ -308,9 +346,7 @@
                     x: Number(p.x),
                     y: Number(p.y),
                     y_invertida: Math.round(pageHeight - p.y),
-                    pagina: Number(p.pagina),
-                    ancho: FIRMA_W,
-                    alto: FIRMA_H
+                    pagina: Number(p.pagina)
                 };
             });
 
