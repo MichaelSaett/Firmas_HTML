@@ -1,4 +1,4 @@
-# 📄 Módulo de Ubicación de Firmas E-digital (Frontend)
+# 📄 Módulo de Ubicación de Firmas (Frontend)
 
 Una herramienta frontend ligera y robusta para la previsualización de documentos PDF y el posicionamiento visual de coordenadas de firmas electrónicas. Diseñada para integrarse mediante `iframes` con sistemas backend (ej. CodeIgniter, Laravel, Node).
 
