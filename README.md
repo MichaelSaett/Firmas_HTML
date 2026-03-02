@@ -1,31 +1,38 @@
-# 📄 E-Digital Signature Placer (Posicionador Automático de Firmas)
+# 📄 Módulo de Ubicación de Firmas (Frontend)
 
-Un módulo Frontend avanzado e independiente diseñado para la ubicación visual y automática de recuadros de firma electrónica sobre documentos PDF. 
-
-Este sistema utiliza **PDF.js** para renderizar el documento en el navegador, escanear su contenido en busca de zonas de firma, y devolver un JSON enriquecido con coordenadas precisas para su posterior procesamiento en el Backend (ej. CodeIgniter, Laravel, Node).
+Una herramienta frontend ligera y robusta para la previsualización de documentos PDF y el posicionamiento visual de coordenadas de firmas electrónicas. Diseñada para integrarse mediante `iframes` con sistemas backend (ej. CodeIgniter, Laravel, Node).
 
 ## ✨ Características Principales
 
-* 🧠 **Smart Anchor (Anclaje Inteligente):** Escanea la capa de texto del PDF buscando palabras clave como *"Empleador", "Trabajador", "RUT", "DNI", "RFC"*, entre otras. Si las encuentra, "teletransporta" y ancla la caja de firma exactamente sobre la línea correspondiente.
-* 📏 **Coordenadas Universales (Eje Y Invertido):** Calcula y exporta las coordenadas tradicionales de la web (desde arriba hacia abajo) y las coordenadas estándar de los PDF (desde abajo hacia arriba), evitando dolores de cabeza en el Backend al momento de estampar la firma.
-* 🧲 **Guías Magnéticas (Snapping):** Asistencia visual de alineación automática (ejes X e Y) al arrastrar múltiples firmas para un diseño simétrico y perfecto.
-* 🛡️ **Prevención de Errores (Candados QA):** Validaciones estrictas para evitar el envío de JSON vacíos, firmas incompletas o interacciones antes de recibir la configuración del servidor.
+* **Renderizado de PDF Nativo:** Utiliza `PDF.js` para renderizar documentos de forma local en el navegador, garantizando privacidad y rapidez.
+* **Smart Anchors (Anclaje Inteligente):** Escanea el texto del PDF y auto-posiciona las cajas de firma sobre palabras clave (`firma`, `rut`, `empleador`, etc.), dando prioridad de derecha a izquierda.
+* **Drag & Drop con Clamping:** Permite arrastrar las cajas de firma libremente, pero incluye un sistema de contención matemática (clamping) que impide que las firmas salgan del área imprimible del documento.
+* **Dimensionamiento Dinámico:** El tamaño de las cajas se adapta automáticamente:
+  * **Estándar:** `160x56 px` (para 3, 5 o más firmas).
+  * **Avanzada:** `200x70 px` (para 1, 2 o 4 firmas).
+  * **Metadatos:** Respeta cualquier tamaño exacto enviado por el backend.
+* **Persistencia Local (Auto-guardado):** Guarda el progreso en `localStorage`. Si el usuario recarga la página por accidente, las firmas ubicadas se restauran instantáneamente.
+* **Paginación Estricta:** Manejo seguro de paginación que desactiva botones y controles si el documento tiene una sola página o si el usuario intenta ingresar un número fuera de los límites.
 
-## 🛠️ Tecnologías
+## 🚀 Tecnologías Utilizadas
 
-* **HTML5 / CSS3:** Interfaz limpia, responsiva y orientada a la usabilidad (UX).
-* **Vanilla JavaScript (ES6+):** Lógica de arrastre, cálculo de matrices y comunicación sin dependencias pesadas.
-* **Mozilla PDF.js (v3.11):** Motor de renderizado y extracción de metadatos/texto nativo de los documentos.
+* **HTML5 / CSS3:** Diseño responsivo, variables CSS y animaciones fluidas (Loader).
+* **Vanilla JavaScript (ES6+):** Lógica pura sin frameworks pesados (sin React, Vue o jQuery).
+* **[PDF.js](https://mozilla.github.io/pdf.js/) (v3.11.174):** Core para el procesamiento y extracción de texto de documentos PDF.
 
-## 🚀 Cómo funciona la Integración (API Interna)
+## 🔌 Integración y Comunicación (API Frontend)
 
-Este módulo está pensado para vivir dentro de un `<iframe>` o ventana modal, comunicándose con el sistema padre (Backend/Plataforma principal) mediante `window.postMessage`.
+Este módulo se comunica con el sistema padre (Backend/Iframe) a través de la API `window.postMessage`.
 
-### 1. Recibir Configuración (De Padre a Módulo)
-El sistema padre debe enviar un mensaje indicando cuántas firmas se requieren para habilitar la interfaz:
+### 1. Iniciar el Módulo (De Backend a Frontend)
+Para configurar la cantidad de firmas requeridas y su tamaño, el sistema padre debe enviar el siguiente objeto JSON:
 
 ```javascript
 window.postMessage({
     tipo: 'CONFIGURAR_FIRMAS',
-    cantidad: 2 // Número de firmantes requeridos
+    cantidad: 3, // Número de firmas a ubicar
+    metadata: {  // Opcional: Fuerza un tamaño específico para la caja
+        ancho: 220,
+        alto: 100
+    }
 }, '*');
