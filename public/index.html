@@ -43,6 +43,11 @@
         .firma-box { position: absolute; background: rgba(0, 200, 83, 0.15); border: 2px solid var(--color-primario); color: var(--color-secundario); font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: grab; user-select: none; border-radius: 4px; text-align: center; box-sizing: border-box; z-index: 10; font-size: 12px; }
         .btn-cerrar-firma { position: absolute; top: -8px; right: -8px; background: var(--color-peligro); color: var(--color-blanco); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; z-index: 20; }
         
+        /* GUIAS MAGNÉTICAS (VERDES) */
+        .guia-magnetica { position: absolute; background-color: var(--color-primario); display: none; pointer-events: none; z-index: 5; opacity: 0.8; }
+        #guia-v { width: 1.5px; height: 100%; top: 0; }
+        #guia-h { height: 1.5px; width: 100%; left: 0; }
+
         .loader-container { text-align: center; margin-top: 20px; }
         .spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid rgba(0, 200, 83, 0.2); border-top: 3px solid var(--color-primario); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -81,6 +86,8 @@
 
     <div id="visor-container">
         <canvas id="pdf-canvas"></canvas>
+        <div id="guia-v" class="guia-magnetica"></div>
+        <div id="guia-h" class="guia-magnetica"></div>
     </div>
 
     <script>
@@ -91,6 +98,7 @@
         let currentJson = { positions: {} }, cantidadFirmantes = 0;
         let anclajesEncontrados = [], lowestTextY = 100;
         let FIRMA_W = 160, FIRMA_H = 56;
+        const UMBRAL_MAGNETICO = 12; // Define la fuerza del imán para la alineación
 
         // --- VALIDACIÓN DE PDF Y DRAG & DROP RESTAURADA ---
         function validarArchivo(file) {
@@ -111,6 +119,7 @@
             return true;
         }
 
+        // Muestra el nombre del archivo cargado exitosamente
         function mostrarNombreArchivo() {
             const input = document.getElementById('pdfFile');
             const label = document.getElementById('file-label');
@@ -143,6 +152,7 @@
         });
         // ----------------------------------------------------
 
+        // Recibe las configuraciones (Metadatos) enviadas desde el backend
         window.addEventListener('message', function(event) {
             if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
                 cantidadFirmantes = parseInt(event.data.cantidad) || 0;
@@ -157,11 +167,11 @@
             }
         });
 
+        // Inicia el análisis y lectura del documento PDF cargado
         async function procesarPDF() {
             const file = document.getElementById('pdfFile').files[0];
             if (!file) return alert("Selecciona un PDF.");
             
-            // Re-validación por seguridad
             if (!validarArchivo(file)) return;
 
             document.getElementById('btnProcesar').style.display = 'none';
@@ -182,26 +192,97 @@
             finally { document.getElementById('loader').style.display = 'none'; }
         }
 
+       
+
+        /*
+         * FUNCIÓN: renderizarPagina
+         * Propósito: Dibuja el PDF, escanea el texto buscando anclajes cortos (evitando párrafos),
+         * fusiona palabras cercanas, fuerza la alineación Y (altura) y asigna posiciones semánticas.
+         */
         async function renderizarPagina() {
             const page = await pdfGlobal.getPage(paginaActualNum);
             const vp = page.getViewport({ scale: 1.0 });
             pageWidth = vp.width; pageHeight = vp.height;
 
             const claves = ["rut", "run", "c.i", "c.i.", "cedula", "dni", "ruc", "c.e.", "curp", "rfc", "ine", "ife", "patron", "firma", "empleador", "trabajador", "empleado", "empresa", "representante", "apoderado", "cliente", "proveedor", "contratante", "contratista", "arrendador", "arrendatario", "vendedor", "comprador"];
+            
             try {
                 const text = await page.getTextContent();
-                let finds = [];
+                let findsRaw = [];
                 let minY = pageHeight;
+
                 text.items.forEach(it => {
-                    if (claves.some(p => it.str.toLowerCase().includes(p))) {
-                        finds.push({ x: it.transform[4], y: it.transform[5] });
-                    }
+                    let txt = it.str.trim().toLowerCase();
                     if (it.transform[5] < minY) minY = it.transform[5];
+
+                    // 1. REGLA DE CARACTERES: Ignorar párrafos, buscar solo etiquetas cortas
+                    if (txt.length > 0 && txt.length <= 40) {
+                        if (claves.some(p => txt.includes(p))) {
+                            findsRaw.push({ x: it.transform[4], y: it.transform[5], texto: txt });
+                        }
+                    }
                 });
-                finds.sort((a, b) => b.x - a.x);
-                anclajesEncontrados = finds;
-                lowestTextY = minY - 80;
-            } catch(e) { lowestTextY = 100; }
+                
+                let findsFiltrados = [];
+
+                // 2. FILTRO ANTI-DUPLICADOS Y FUSIÓN DE TEXTO:
+                // Si lee "Firma" y "Empleador" separados pero muy cerca, los une en un solo texto.
+                // Esto evita que el sistema gaste 2 cajas en el mismo lugar.
+                findsRaw.forEach(raw => {
+                    let existente = findsFiltrados.find(f => Math.abs(f.x - raw.x) < 80 && Math.abs(f.y - raw.y) < 30);
+                    if (existente) {
+                        existente.texto += " " + raw.texto; // Ej: "firma" + " " + "empleador"
+                    } else {
+                        findsFiltrados.push({ x: raw.x, y: raw.y, texto: raw.texto });
+                    }
+                });
+
+                // 3. ALINEACIÓN FORZADA (EJE Y):
+                // Garantiza que las firmas que están en la misma línea visual compartan el mismo Y exacto.
+                if (findsFiltrados.length > 0) {
+                    let lineasDetectadas = [];
+                    findsFiltrados.forEach(f => {
+                        let linea = lineasDetectadas.find(l => Math.abs(l.yBase - f.y) <= 20);
+                        if (linea) f.y = linea.yBase; 
+                        else lineasDetectadas.push({ yBase: f.y });
+                    });
+                }
+
+                // 4. ORDENAMIENTO ESTÁNDAR (Izquierda a Derecha)
+                findsFiltrados.sort((a, b) => {
+                    if (Math.abs(a.y - b.y) > 20) return a.y - b.y; // De abajo hacia arriba
+                    return a.x - b.x; // Izquierda a derecha
+                });
+
+                // 5. ASIGNACIÓN SEMÁNTICA (El cerebro de la ubicación)
+                // Buscamos quién es quién leyendo el texto fusionado
+                let anclajeEmpleador = findsFiltrados.find(f => /empleador|patron|empresa/.test(f.texto));
+                let anclajeTrabajador = findsFiltrados.find(f => /trabajador|empleado/.test(f.texto));
+                
+                let anclajesOrdenados = [];
+                
+                // Forzamos: Firmante 1 SIEMPRE al Empleador, Firmante 2 SIEMPRE al Trabajador
+                if (anclajeEmpleador) anclajesOrdenados[0] = anclajeEmpleador;
+                if (anclajeTrabajador) anclajesOrdenados[1] = anclajeTrabajador;
+
+                // Rellenar los huecos con el resto de anclajes (los códigos QR o firmas extra)
+                let anclajesRestantes = findsFiltrados.filter(f => f !== anclajeEmpleador && f !== anclajeTrabajador);
+                
+                let index = 0;
+                while (anclajesOrdenados.length < findsFiltrados.length || anclajesRestantes.length > 0) {
+                    if (anclajesOrdenados[index] === undefined && anclajesRestantes.length > 0) {
+                        anclajesOrdenados[index] = anclajesRestantes.shift();
+                    }
+                    index++;
+                }
+
+                // Limpiamos de posiciones vacías
+                anclajesEncontrados = anclajesOrdenados.filter(a => a !== undefined);
+                
+                // 6. PREPARAR GRILLA 3x3: Punto más bajo si no hay anclajes
+                lowestTextY = minY - (FIRMA_H + 30); 
+                if (lowestTextY < 0) lowestTextY = 20; 
+            } catch(e) { lowestTextY = 50; }
 
             currentScale = Math.min(window.innerWidth - 30, 800) / pageWidth;
             const viewport = page.getViewport({ scale: currentScale });
@@ -213,6 +294,11 @@
             validarBotonesPaginacion();
         }
 
+        /**
+         * FUNCIÓN: agregarSiguienteFirma
+         * Propósito: Ubica la caja consumiendo los anclajes semánticos perfectos.
+         * Si el documento viene en blanco, aplica la grilla de 3 cajas por fila.
+         */
         function agregarSiguienteFirma() {
             let num = 0;
             for(let i=1; i<=cantidadFirmantes; i++) {
@@ -221,9 +307,51 @@
             if(!num) return;
 
             const key = 'signer-' + num;
-            let pX = anclajesEncontrados[num-1] ? anclajesEncontrados[num-1].x - 20 : 50 + (num * 15);
-            let pY = anclajesEncontrados[num-1] ? anclajesEncontrados[num-1].y + 35 : lowestTextY + (num * 10);
+            let pX = 50, pY = lowestTextY;
 
+            if(anclajesEncontrados[num-1]) {
+                // CASO A: Anclaje Semántico (Centrado perfecto sobre el texto)
+                let anclaje = anclajesEncontrados[num-1];
+                let anchoDelTexto = anclaje.anchoTexto || 100;
+                
+                // Cálculo del centro matemático
+                pX = (anclaje.x + (anchoDelTexto / 2)) - (FIRMA_W / 2);
+                pY = anclaje.y + 40; 
+
+                // ANTI-SOLAPAMIENTO: Si se tocan o pegan, las separamos a la fuerza
+                Object.keys(currentJson.positions).forEach(k => {
+                    let posExistente = currentJson.positions[k];
+                    
+                    // Verificamos si están en la misma línea (altura)
+                    if (Math.abs(posExistente.y - pY) < 30) {
+                        let margen = 15; // 15px de espacio en blanco obligatorio
+                        
+                        // Si la caja nueva se monta o pega a la existente
+                        if (pX + FIRMA_W + margen > posExistente.x && pX < posExistente.x + FIRMA_W + margen) {
+                            if (pX < posExistente.x) {
+                                pX = posExistente.x - FIRMA_W - margen; // La empuja a la izquierda
+                            } else {
+                                pX = posExistente.x + FIRMA_W + margen; // La empuja a la derecha
+                            }
+                        }
+                    }
+                });
+            } else {
+                // CASO B: Grilla de 3 Firmas lado a lado
+                let indiceGrilla = num - 1; 
+                let fila = Math.floor(indiceGrilla / 3);  
+                let columna = indiceGrilla % 3;           
+
+                let margenLateral = 40;
+                let espacioDisponible = pageWidth - (margenLateral * 2);
+                let gapX = (espacioDisponible - (FIRMA_W * 3)) / 2;
+                if (gapX < 15) gapX = 15; 
+
+                pX = margenLateral + (columna * (FIRMA_W + gapX));
+                pY = lowestTextY - (fila * (FIRMA_H + 20)); 
+            }
+
+            // CLAMPING: Nunca salir de la hoja
             pX = Math.max(0, Math.min(pX, pageWidth - FIRMA_W));
             pY = Math.max(0, Math.min(pY, pageHeight - FIRMA_H));
 
@@ -232,7 +360,7 @@
             actualizarUI();
             autoGuardarLocal();
         }
-
+        // Inserta la caja HTML en el visor, aplicando el arrastre y guías magnéticas
         function dibujarCaja(key, pos) {
             if(pos.pagina !== paginaActualNum) return;
             const old = document.getElementById('box-' + key);
@@ -251,38 +379,97 @@
             box.style.left = (pos.x * currentScale) + "px";
             box.style.top = ((pageHeight - pos.y - FIRMA_H) * currentScale) + "px";
             
+            // --- ARRASTRE SUAVE Y GUÍAS (CORREGIDO) ---
             box.onmousedown = (e) => {
                 if(e.target.className.includes('cerrar')) return;
-                let startX = e.clientX, startY = e.clientY;
+                e.preventDefault(); 
+                
+                // 1. Guardamos el punto exacto del click inicial
+                let startMouseX = e.clientX;
+                let startMouseY = e.clientY;
+                let startBoxLeft = box.offsetLeft;
+                let startBoxTop = box.offsetTop;
+                
+                const guiaV = document.getElementById('guia-v');
+                const guiaH = document.getElementById('guia-h');
+                
                 document.onmousemove = (ev) => {
-                    let dx = startX - ev.clientX, dy = startY - ev.clientY;
-                    startX = ev.clientX; startY = ev.clientY;
-                    let nT = box.offsetTop - dy, nL = box.offsetLeft - dx;
+                    // 2. Calculamos la diferencia desde el click (esto evita que tiemble o se trabe)
+                    let deltaX = ev.clientX - startMouseX;
+                    let deltaY = ev.clientY - startMouseY;
+                    
+                    let nL = startBoxLeft + deltaX;
+                    let nT = startBoxTop + deltaY;
 
+                    // 3. Clamping (No salir del PDF)
                     if (nL < 0) nL = 0; if (nT < 0) nT = 0;
                     if (nL + wR > pageWidth * currentScale) nL = (pageWidth * currentScale) - wR;
                     if (nT + hR > pageHeight * currentScale) nT = (pageHeight * currentScale) - hR;
 
-                    box.style.top = nT + "px"; box.style.left = nL + "px";
-                    currentJson.positions[key].x = Math.round(nL / currentScale);
-                    currentJson.positions[key].y = Math.round(pageHeight - (nT / currentScale) - FIRMA_H);
+                    let visualTop = nT;
+                    let visualLeft = nL;
+                    let snapV = false, snapH = false;
+
+                    // 4. Guías Magnéticas Verdes
+                    document.querySelectorAll('.firma-box').forEach(otraCaja => {
+                        if (otraCaja.id !== box.id && otraCaja.style.display !== 'none') {
+                            let otraTop = otraCaja.offsetTop;
+                            let otraLeft = otraCaja.offsetLeft;
+
+                            // 12 es el margen del imán
+                            if (Math.abs(nL - otraLeft) < 12) {
+                                visualLeft = otraLeft; 
+                                snapV = true;
+                                guiaV.style.left = visualLeft + "px";
+                                guiaV.style.display = "block";
+                            }
+                            if (Math.abs(nT - otraTop) < 12) {
+                                visualTop = otraTop; 
+                                snapH = true;
+                                guiaH.style.top = visualTop + "px";
+                                guiaH.style.display = "block";
+                            }
+                        }
+                    });
+
+                    if (!snapV) guiaV.style.display = "none";
+                    if (!snapH) guiaH.style.display = "none";
+
+                    // 5. Aplicar posición final a la caja
+                    box.style.top = visualTop + "px"; 
+                    box.style.left = visualLeft + "px";
+                    
+                    // 6. Guardar coordenadas al instante
+                    currentJson.positions[key].x = Math.round(visualLeft / currentScale);
+                    currentJson.positions[key].y = Math.round(pageHeight - (visualTop / currentScale) - FIRMA_H);
                 };
-                document.onmouseup = () => { document.onmousemove = null; autoGuardarLocal(); };
+                
+                document.onmouseup = () => { 
+                    document.onmousemove = null; 
+                    document.onmouseup = null; 
+                    guiaV.style.display = "none";
+                    guiaH.style.display = "none";
+                    autoGuardarLocal(); 
+                };
             };
         }
 
+        // Restaura en pantalla todas las firmas guardadas al cambiar de página
         function reubicarCajasExistentes() {
             document.querySelectorAll('.firma-box').forEach(b => b.remove());
             Object.keys(currentJson.positions).forEach(k => dibujarCaja(k, currentJson.positions[k]));
         }
 
+        // Elimina una sola firma del sistema
         function eliminarFirma(e, k) { e.stopPropagation(); document.getElementById('box-'+k).remove(); delete currentJson.positions[k]; actualizarUI(); autoGuardarLocal(); }
         
+        // Limpia totalmente el lienzo y el JSON
         function limpiarFirmas() {
             if(!confirm("¿Borrar todo?")) return;
             currentJson.positions = {}; reubicarCajasExistentes(); actualizarUI(); autoGuardarLocal();
         }
 
+        // Actualiza botones e interfaces basado en si se completó el cupo de firmas
         function actualizarUI() {
             const count = Object.keys(currentJson.positions).length;
             const btn = document.getElementById('btnGenerar');
@@ -320,11 +507,13 @@
             }
         }
 
+        // Permite que las posiciones sobrevivan si el usuario recarga la ventana
         function autoGuardarLocal() {
             const f = document.getElementById('pdfFile').files[0];
             if(f) localStorage.setItem('borrador_' + f.name, JSON.stringify({ p: currentJson.positions, c: cantidadFirmantes, w: FIRMA_W, h: FIRMA_H }));
         }
 
+        // Lee y restaura la memoria local al abrir un PDF previamente editado
         function restaurarBorradorLocal() {
             const f = document.getElementById('pdfFile').files[0];
             const s = f ? localStorage.getItem('borrador_' + f.name) : null;
@@ -335,6 +524,7 @@
             }
         }
 
+        // Finaliza el proceso y envía los datos mediante mensaje al Backend
         function enviarAE_digital() {
             const keys = Object.keys(currentJson.positions);
             if (keys.length < cantidadFirmantes) return alert(`Faltan firmas (${keys.length}/${cantidadFirmantes})`);
