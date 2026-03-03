@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ubicación de Firmas E-digital (V4.11 - Validación PDF & Fixes)</title>
+    <title>Ubicación de Firmas E-digital</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -337,18 +337,21 @@
                     }
                 });
             } else {
-                // CASO B: Grilla de 3 Firmas lado a lado
+                // CASO B: Grilla de 3 Firmas lado a lado (Desde abajo hacia arriba)
                 let indiceGrilla = num - 1; 
                 let fila = Math.floor(indiceGrilla / 3);  
                 let columna = indiceGrilla % 3;           
 
                 let margenLateral = 40;
+                let margenInferior = 30; // Distancia desde el borde inferior de la hoja (Y=0)
                 let espacioDisponible = pageWidth - (margenLateral * 2);
                 let gapX = (espacioDisponible - (FIRMA_W * 3)) / 2;
                 if (gapX < 15) gapX = 15; 
 
                 pX = margenLateral + (columna * (FIRMA_W + gapX));
-                pY = lowestTextY - (fila * (FIRMA_H + 20)); 
+                
+                // Crecimiento hacia ARRIBA: empezamos en el margen inferior y SUMAMOS por cada fila
+                pY = margenInferior + (fila * (FIRMA_H + 20)); 
             }
 
             // CLAMPING: Nunca salir de la hoja
@@ -379,12 +382,10 @@
             box.style.left = (pos.x * currentScale) + "px";
             box.style.top = ((pageHeight - pos.y - FIRMA_H) * currentScale) + "px";
             
-            // --- ARRASTRE SUAVE Y GUÍAS (CORREGIDO) ---
             box.onmousedown = (e) => {
                 if(e.target.className.includes('cerrar')) return;
                 e.preventDefault(); 
                 
-                // 1. Guardamos el punto exacto del click inicial
                 let startMouseX = e.clientX;
                 let startMouseY = e.clientY;
                 let startBoxLeft = box.offsetLeft;
@@ -394,14 +395,12 @@
                 const guiaH = document.getElementById('guia-h');
                 
                 document.onmousemove = (ev) => {
-                    // 2. Calculamos la diferencia desde el click (esto evita que tiemble o se trabe)
                     let deltaX = ev.clientX - startMouseX;
                     let deltaY = ev.clientY - startMouseY;
                     
                     let nL = startBoxLeft + deltaX;
                     let nT = startBoxTop + deltaY;
 
-                    // 3. Clamping (No salir del PDF)
                     if (nL < 0) nL = 0; if (nT < 0) nT = 0;
                     if (nL + wR > pageWidth * currentScale) nL = (pageWidth * currentScale) - wR;
                     if (nT + hR > pageHeight * currentScale) nT = (pageHeight * currentScale) - hR;
@@ -410,13 +409,12 @@
                     let visualLeft = nL;
                     let snapV = false, snapH = false;
 
-                    // 4. Guías Magnéticas Verdes
+                    // 1. Aplicamos el Imán (Guías Magnéticas)
                     document.querySelectorAll('.firma-box').forEach(otraCaja => {
                         if (otraCaja.id !== box.id && otraCaja.style.display !== 'none') {
                             let otraTop = otraCaja.offsetTop;
                             let otraLeft = otraCaja.offsetLeft;
 
-                            // 12 es el margen del imán
                             if (Math.abs(nL - otraLeft) < 12) {
                                 visualLeft = otraLeft; 
                                 snapV = true;
@@ -432,14 +430,39 @@
                         }
                     });
 
+                    // 2. DETECCIÓN DE COLISIONES (Efecto Choque/Muro)
+                    let hayColision = false;
+                    document.querySelectorAll('.firma-box').forEach(otraCaja => {
+                        if (otraCaja.id !== box.id && otraCaja.style.display !== 'none') {
+                            let oL = otraCaja.offsetLeft;
+                            let oT = otraCaja.offsetTop;
+
+                            // Matemática AABB: Verificamos si los bordes de la caja en movimiento invaden a otra.
+                            // Dejamos un margen de 2px para que el imán funcione si solo están "pegadas" borde con borde.
+                            if (visualLeft < oL + wR - 2 &&
+                                visualLeft + wR > oL + 2 &&
+                                visualTop < oT + hR - 2 &&
+                                visualTop + hR > oT + 2) {
+                                hayColision = true;
+                            }
+                        }
+                    });
+
+                    // 3. Si chocan, cancelamos el movimiento propuesto y la caja se queda "trabada" contra el muro invisible
+                    if (hayColision) {
+                        visualLeft = box.offsetLeft;
+                        visualTop = box.offsetTop;
+                        snapV = false; // Desactivar guías si chocó
+                        snapH = false;
+                    }
+
                     if (!snapV) guiaV.style.display = "none";
                     if (!snapH) guiaH.style.display = "none";
 
-                    // 5. Aplicar posición final a la caja
+                    // Aplicamos la posición final (ya sea la movida, la imantada o la bloqueada por choque)
                     box.style.top = visualTop + "px"; 
                     box.style.left = visualLeft + "px";
                     
-                    // 6. Guardar coordenadas al instante
                     currentJson.positions[key].x = Math.round(visualLeft / currentScale);
                     currentJson.positions[key].y = Math.round(pageHeight - (visualTop / currentScale) - FIRMA_H);
                 };
