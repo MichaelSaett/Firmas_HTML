@@ -98,6 +98,8 @@
         let currentJson = { positions: {} }, cantidadFirmantes = 0;
         let anclajesEncontrados = [], lowestTextY = 100;
         let FIRMA_W = 160, FIRMA_H = 56;
+        let coordenadasDelBackend = null;
+        let paginaFirmaDefecto = null;
         const UMBRAL_MAGNETICO = 12; // Define la fuerza del imán para la alineación
 
         // --- VALIDACIÓN DE PDF Y DRAG & DROP RESTAURADA ---
@@ -156,16 +158,27 @@
         window.addEventListener('message', function(event) {
             if (event.data && event.data.tipo === 'CONFIGURAR_FIRMAS') {
                 cantidadFirmantes = parseInt(event.data.cantidad) || 0;
+                
                 if (event.data.metadata && event.data.metadata.ancho) {
                     FIRMA_W = parseInt(event.data.metadata.ancho);
                     FIRMA_H = parseInt(event.data.metadata.alto);
                 } else {
                     FIRMA_W = [1, 2, 4].includes(cantidadFirmantes) ? 200 : 160;
                     FIRMA_H = [1, 2, 4].includes(cantidadFirmantes) ? 70 : 56;
+                } 
+
+                // INYECCIÓN 1: Leer metadata "page_sign"
+                if (event.data.metadata && event.data.metadata.page_sign) {
+                    paginaFirmaDefecto = parseInt(event.data.metadata.page_sign);
                 }
-                if (pdfGlobal) actualizarUI();
+
+                if (event.data.positions) {
+                    coordenadasDelBackend = event.data.positions;
+                }
+
+                if (pdfGlobal) actualizarUI(); 
             }
-        });
+        }); 
 
         // Inicia el análisis y lectura del documento PDF cargado
         async function procesarPDF() {
@@ -309,7 +322,13 @@
             const key = 'signer-' + num;
             let pX = 50, pY = lowestTextY;
 
-            if(anclajesEncontrados[num-1]) {
+            // PRIORIDAD 1: SI EL BACKEND MANDA LAS COORDENADAS, LAS USAMOS
+            if (coordenadasDelBackend && coordenadasDelBackend[key]) {
+                pX = Number(coordenadasDelBackend[key].x);
+                pY = Number(coordenadasDelBackend[key].y);
+            } 
+            // PRIORIDAD 2: SI NO HAY COORDENADAS DEL BACKEND, USAMOS EL ANCLAJE AUTOMÁTICO AL TEXTO
+            else if(anclajesEncontrados[num-1]) {
                 // CASO A: Anclaje Semántico (Centrado perfecto sobre el texto)
                 let anclaje = anclajesEncontrados[num-1];
                 let anchoDelTexto = anclaje.anchoTexto || 100;
@@ -323,7 +342,7 @@
                     let posExistente = currentJson.positions[k];
                     
                     // Verificamos si están en la misma línea (altura)
-                    if (Math.abs(posExistente.y - pY) < 30) {
+                    if (posExistente.pagina === paginaActualNum && Math.abs(posExistente.y - pY) < 30) {
                         let margen = 15; // 15px de espacio en blanco obligatorio
                         
                         // Si la caja nueva se monta o pega a la existente
@@ -358,11 +377,28 @@
             pX = Math.max(0, Math.min(pX, pageWidth - FIRMA_W));
             pY = Math.max(0, Math.min(pY, pageHeight - FIRMA_H));
 
-            currentJson.positions[key] = { x: Math.round(pX), y: Math.round(pY), pagina: paginaActualNum };
-            dibujarCaja(key, currentJson.positions[key]);
-            actualizarUI();
-            autoGuardarLocal();
+            // INYECCIÓN 2: Asignar la página según el metadata o la página actual
+            let paginaAsignada = paginaActualNum;
+            if (paginaFirmaDefecto && paginaFirmaDefecto > 0 && paginaFirmaDefecto <= totalPaginasGlobal) {
+                paginaAsignada = paginaFirmaDefecto;
+            }
+
+            currentJson.positions[key] = { x: Math.round(pX), y: Math.round(pY), pagina: paginaAsignada };
+
+            // INYECCIÓN 3: Si el destino no es la página actual, la renderizamos y nos movemos a ella
+            if (paginaActualNum !== paginaAsignada) {
+                paginaActualNum = paginaAsignada;
+                renderizarPagina().then(() => {
+                    actualizarUI();
+                    autoGuardarLocal();
+                });
+            } else {
+                dibujarCaja(key, currentJson.positions[key]);
+                actualizarUI();
+                autoGuardarLocal();
+            }
         }
+        
         // Inserta la caja HTML en el visor, aplicando el arrastre y guías magnéticas
         function dibujarCaja(key, pos) {
             if(pos.pagina !== paginaActualNum) return;
